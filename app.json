@@ -38,6 +38,19 @@
       "typedRoutes": true,
       "reactCompiler": true,
       "baseUrl": "/new-chester-app"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1388102c-3831-45f3-a75b-2742b3ee8fa6"
+      }
+    },
+    "owner": "new-c",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1388102c-3831-45f3-a75b-2742b3ee8fa6"
     }
   }
 }
