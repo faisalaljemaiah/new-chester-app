@@ -7,6 +7,7 @@ import { GroupedList, GroupedRow, Chevron } from '@/components/grouped-list';
 import { ProgressRing } from '@/components/progress-ring';
 import { PATIENT, PRIMARY_PROVIDER, SESSIONS_TOTAL, SESSIONS_USED, SESSION_HISTORY } from '@/data/mock';
 import { Fonts, Radius } from '@/constants/theme';
+import { useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -16,6 +17,7 @@ const STATUS_LABEL: Record<string, string> = {
 
 export default function ProfileScreen() {
   const theme = useTheme();
+  const { session, signOut } = useAuth();
   const doctor = PRIMARY_PROVIDER;
   const progress = SESSIONS_USED / SESSIONS_TOTAL;
 
@@ -104,6 +106,19 @@ export default function ProfileScreen() {
             </Pressable>
           ))}
         </GroupedList>
+
+        <Text style={[styles.sectionTitle, styles.sectionTitleSpaced, { color: theme.text }]}>Account</Text>
+        <GroupedList>
+          <GroupedRow last>
+            <View style={styles.rowText}>
+              <Text style={[styles.rowTitle, { color: theme.text }]}>Signed in as</Text>
+              <Text style={[styles.rowSubtitle, { color: theme.textTertiary }]}>{session?.user.email}</Text>
+            </View>
+          </GroupedRow>
+        </GroupedList>
+        <Pressable onPress={signOut} style={[styles.signOutButton, { backgroundColor: theme.card }]}>
+          <Text style={[styles.signOutLabel, { color: theme.danger }]}>Sign out</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
@@ -137,4 +152,7 @@ const styles = StyleSheet.create({
   dateDay: { fontSize: 14, fontWeight: '700', fontFamily: Fonts.sans },
   statusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 7 },
   statusLabel: { fontSize: 11.5, fontWeight: '600', fontFamily: Fonts.sans },
+
+  signOutButton: { marginTop: 12, borderRadius: Radius.lg, paddingVertical: 14, alignItems: 'center' },
+  signOutLabel: { fontSize: 15, fontWeight: '600', fontFamily: Fonts.sans },
 });
