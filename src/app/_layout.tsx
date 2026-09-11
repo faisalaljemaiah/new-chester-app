@@ -18,9 +18,9 @@ function AuthGate({ children }: { children: ReactNode }) {
     if (loading) return;
     const inAuthGroup = segments[0] === '(auth)';
 
-    if (!session && !inAuthGroup) {
-      router.replace('/(auth)/login');
-    } else if (session && inAuthGroup) {
+    // Sign-in isn't required for now (demo/preview mode) -- only redirect
+    // an already-signed-in user away from the login/signup screens.
+    if (session && inAuthGroup) {
       router.replace('/');
     }
   }, [session, loading, segments, router]);

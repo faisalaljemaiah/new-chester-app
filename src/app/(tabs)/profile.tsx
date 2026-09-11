@@ -107,18 +107,22 @@ export default function ProfileScreen() {
           ))}
         </GroupedList>
 
-        <Text style={[styles.sectionTitle, styles.sectionTitleSpaced, { color: theme.text }]}>Account</Text>
-        <GroupedList>
-          <GroupedRow last>
-            <View style={styles.rowText}>
-              <Text style={[styles.rowTitle, { color: theme.text }]}>Signed in as</Text>
-              <Text style={[styles.rowSubtitle, { color: theme.textTertiary }]}>{session?.user.email}</Text>
-            </View>
-          </GroupedRow>
-        </GroupedList>
-        <Pressable onPress={signOut} style={[styles.signOutButton, { backgroundColor: theme.card }]}>
-          <Text style={[styles.signOutLabel, { color: theme.danger }]}>Sign out</Text>
-        </Pressable>
+        {session && (
+          <>
+            <Text style={[styles.sectionTitle, styles.sectionTitleSpaced, { color: theme.text }]}>Account</Text>
+            <GroupedList>
+              <GroupedRow last>
+                <View style={styles.rowText}>
+                  <Text style={[styles.rowTitle, { color: theme.text }]}>Signed in as</Text>
+                  <Text style={[styles.rowSubtitle, { color: theme.textTertiary }]}>{session.user.email}</Text>
+                </View>
+              </GroupedRow>
+            </GroupedList>
+            <Pressable onPress={signOut} style={[styles.signOutButton, { backgroundColor: theme.card }]}>
+              <Text style={[styles.signOutLabel, { color: theme.danger }]}>Sign out</Text>
+            </Pressable>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
