@@ -1,6 +1,6 @@
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter, useSegments } from 'expo-router';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
@@ -8,22 +8,13 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { useTheme } from '@/hooks/use-theme';
 
+// Sign-in isn't required for now (demo/preview mode) -- the login/signup
+// screens have been moved out of src/app (see src/features/auth) so
+// they're not reachable at all. This just waits out the initial session
+// check so the profile tab doesn't flash between guest and signed-in state.
 function AuthGate({ children }: { children: ReactNode }) {
-  const { session, loading } = useAuth();
-  const segments = useSegments();
-  const router = useRouter();
+  const { loading } = useAuth();
   const theme = useTheme();
-
-  useEffect(() => {
-    if (loading) return;
-    const inAuthGroup = segments[0] === '(auth)';
-
-    // Sign-in isn't required for now (demo/preview mode) -- only redirect
-    // an already-signed-in user away from the login/signup screens.
-    if (session && inAuthGroup) {
-      router.replace('/');
-    }
-  }, [session, loading, segments, router]);
 
   if (loading) {
     return (
@@ -48,7 +39,6 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="index" />
               <Stack.Screen name="result" />
-              <Stack.Screen name="(auth)" />
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="booking" options={{ presentation: 'modal' }} />
             </Stack>

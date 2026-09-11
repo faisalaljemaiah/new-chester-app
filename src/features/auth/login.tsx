@@ -71,7 +71,8 @@ export default function LoginScreen() {
             />
           </View>
 
-          <Link href="/(auth)/signup" asChild>
+          {/* Not a registered route right now -- see src/features/auth. */}
+          <Link href={'/(auth)/signup' as never} asChild>
             <TextButton title="Don't have an account? Sign up" />
           </Link>
         </View>
