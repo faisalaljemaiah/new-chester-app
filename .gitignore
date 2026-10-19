@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.expo/
+dist/
+functions/lib/
+*.log
+.env
+.env.local
+.env*.local
+firebase-debug.log
+.firebaserc
+service-account*.json
+out/
+.firebase/
+*-debug.log
+next-env.d.ts
+*.tsbuildinfo

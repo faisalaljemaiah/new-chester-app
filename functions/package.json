@@ -1,0 +1,26 @@
+{
+  "name": "@chester/functions",
+  "private": true,
+  "main": "lib/index.js",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx scripts/seed.mts",
+    "make-admin": "tsx scripts/make-admin.mts",
+    "deploy": "firebase deploy --only functions --config ../firebase/firebase.json",
+    "demo": "FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 GCLOUD_PROJECT=demo-chester tsx scripts/demo-data.mts"
+  },
+  "dependencies": {
+    "firebase-admin": "^14.5.0",
+    "firebase-functions": "^7.4.0"
+  },
+  "devDependencies": {
+    "@chester/shared": "*",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.20.0",
+    "typescript": "^5.6.0"
+  }
+}
