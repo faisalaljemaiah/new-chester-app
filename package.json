@@ -6,8 +6,8 @@
     "apps/*"
   ],
   "scripts": {
-    "dashboard": "npm run dev -w apps/dashboard",
-    "patient": "npm run start -w apps/patient",
+    "app": "npm run start -w apps/clinic",
+    "web": "npm run web -w apps/clinic",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "seed:sql": "tsx supabase/scripts/make-seed.mts",
     "test:db": "tsx --test supabase/tests/*.test.mts"

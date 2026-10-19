@@ -1,18 +1,15 @@
 # New Chester Clinic
 
-Online psychiatry and psychology clinic: a patient app (Expo) and a bilingual practitioner dashboard (Next.js) on Supabase.
+Online psychiatry and psychology clinic: one Expo app (iOS, Android, web) on Supabase. Patients and staff sign in on the same screen; staff get bilingual (English / Arabic) practitioner screens.
 
 See [docs/PLAN.md](docs/PLAN.md) for the full plan, data model, open decisions and the Supabase setup steps.
 
-| | |
-|---|---|
-| ![Patient home](docs/screenshots/p-home.png) | ![Dashboard patient file](docs/screenshots/patient-en.png) |
+![Patient home](docs/screenshots/p-home.png)
 
 ## Layout
 
 ```
-apps/patient      Expo app for patients (iOS, Android, web)
-apps/dashboard    Next.js practitioner dashboard (English / Arabic)
+apps/clinic       The app: patient screens in src/app/(tabs), staff screens in src/app/staff
 packages/shared   Row types, theme, slot calculation, questionnaire scoring
 supabase          Database migration (tables, access rules, functions), seed data, access tests
 ```
@@ -24,12 +21,11 @@ Requires Node 22 and a Supabase project with the migration and seed applied (see
 ```bash
 npm install
 
-# Put the project URL and publishable key in both files
-cp apps/dashboard/.env.example apps/dashboard/.env.local
-cp apps/patient/.env.example apps/patient/.env.local
+# Put the project URL and publishable key in this file
+cp apps/clinic/.env.example apps/clinic/.env.local
 
-npm run dashboard   # http://localhost:3000
-npm run patient     # press w for web, or scan the QR code with Expo Go
+npm run app         # scan the QR code with Expo Go, or press w for web
+npm run web         # web only, http://localhost:8081
 ```
 
 ## Checks

@@ -1,9 +1,9 @@
 # New Chester Clinic: plan
 
-An online psychiatry and psychology clinic with two apps on one Supabase backend:
+An online psychiatry and psychology clinic in one app (iOS, Android and web) on a Supabase backend, in the dark style of the reference design. Everyone signs in on the same screen:
 
-- **Patient app** (iOS, Android and web) in the dark style of the reference design.
-- **Practitioner dashboard** (web) in English and Arabic, with full right-to-left layout.
+- **Patients** see the patient screens: booking, sessions, messages and check-ins.
+- **Practitioners and admins** see the staff screens, in English or Arabic with full right-to-left layout.
 
 Screenshots of the app running on demo data are in [`docs/screenshots`](screenshots).
 
@@ -11,10 +11,9 @@ Screenshots of the app running on demo data are in [`docs/screenshots`](screensh
 
 | Part | Choice | Why |
 |---|---|---|
-| Patient app | Expo SDK 58, React Native, Expo Router | One codebase for iOS, Android and web. Builds and store submission through EAS. |
-| Dashboard | Next.js 16, exported as static files | Runs fully in the browser, so any static host works (Vercel, Netlify, GitHub Pages). |
+| App | Expo SDK 58, React Native, Expo Router (`apps/clinic`) | One codebase for iOS, Android and web. Builds and store submission through EAS; the web build is static files any host can serve. |
 | Backend | Supabase: Postgres, Auth, Realtime | Free plan to start. Every rule lives in the database, so a modified app can't skip it. |
-| Shared code | `packages/shared` | Row types, colours, slot calculation and questionnaire scoring used by both apps. |
+| Shared code | `packages/shared` | Row types, colours, slot calculation and questionnaire scoring. |
 | Region | West EU (Ireland, `eu-west-1`) | Keeps patient data in the EU. A Supabase project's region can't be changed later. |
 
 The free plan has no automatic backups and pauses a project after a week with no activity. Before real patients use it, move to the Pro plan ($25 a month), which adds daily backups and stays on.
@@ -26,7 +25,7 @@ Roles live in the `profiles` table. Only database functions can change them, and
 | Role | How they get it | Can |
 |---|---|---|
 | Patient | Signs up in the app | Book, cancel, message their practitioners, fill in check-ins |
-| Practitioner | An admin adds them on the dashboard's Team page | See only the patients on their care team |
+| Practitioner | An admin adds them on the Team screen | See only the patients on their care team |
 | Admin (clinic owner) | Set once in the SQL editor (see setup step 5) | Everything practitioners can, plus approve availability requests and add staff |
 
 ## Data model
@@ -76,9 +75,11 @@ Anything that has to be checked across tables is a database function the apps ca
 8. **Check-in form**: the questionnaire. If the self-harm question is answered above zero, it shows emergency contact details right away.
 9. **Profile**: sessions done, upcoming sessions, check-ins to fill in, and sign out.
 
-## Dashboard pages
+## Staff screens
 
-| Page | What practitioners do there |
+Tabs: Overview, Appointments, Patient files, Assessments and More. More holds Transfers, Availability, Templates, Team (admins), the language switch and sign-out.
+
+| Screen | What practitioners do there |
 |---|---|
 | Overview | Today's sessions, safety alerts, new results, transfers waiting |
 | Appointments | Upcoming and past sessions. Add the meeting link, mark completed or no-show, cancel. |
@@ -90,19 +91,19 @@ Anything that has to be checked across tables is a database function the apps ca
 | Assessments | Every result, with safety flags and unreviewed results first |
 | Team (admin) | Add practitioners |
 
-The language switch in the sidebar flips the whole dashboard to Arabic and right-to-left, and remembers the choice.
+The language switch under More flips the staff screens to Arabic and right-to-left, and remembers the choice.
 
 ## What's tested
 
 - 28 access tests (`npm run test:db`). They run the real migration on PGlite, an in-process Postgres, with a small stand-in for Supabase's auth schema, so no Docker or project is needed. They cover: notes, to-dos and scores hidden from patients and from other practitioners, no self-promotion to admin, booking only through `book_appointment` with no double booking and no times outside working hours, a form submitted once and scored correctly with the safety flag, only the care team can transfer a patient and only the receiver can accept, only admins approve schedule changes, and patients can't send templates or forms.
-- Type checks pass for all packages. The patient web build and the dashboard static build both succeed.
+- Type checks pass for all packages, and the app's web build succeeds.
 - Not yet run end to end against a real Supabase project. That is the next step once the project has the tables (setup steps 2 and 3).
 
 ## Decisions for you
 
 1. **Video calls.** Right now the practitioner pastes a Zoom or Meet link into the session. A built-in call (for example Daily, Agora or Twilio) can come next. That choice affects cost and where call data is processed.
 2. **Backups.** The free plan has none. Move to Supabase Pro before real patient data goes in.
-3. **Arabic for the patient app.** The dashboard is fully bilingual. The patient app is English for now, and I can add Arabic next. For PHQ-9 and GAD-7 in Arabic, use the clinic's validated translations rather than new ones.
+3. **Arabic for patients.** The staff screens are fully bilingual. The patient screens are English for now, and Arabic can come next. For PHQ-9 and GAD-7 in Arabic, use the clinic's validated translations rather than new ones.
 4. **Photos and branding.** The welcome screen has room for a clinic photo like the reference's doctor image. Send a logo and photo when you have them.
 5. **Payments and notifications** (session reminders, new message alerts) are not built yet.
 6. **Repository visibility.** `new-chester-app` is public. The code contains no keys or patient data, but you may want it private.
@@ -111,12 +112,12 @@ The language switch in the sidebar flips the whole dashboard to Arabic and right
 
 The project `new-chester-app` exists in West EU (Ireland). To finish it:
 
-1. **Keys.** In Project Settings > API Keys, copy the project URL and the **publishable** (anon) key into `apps/patient/.env.local` and `apps/dashboard/.env.local`, using the `.env.example` files as the template. Never put the secret (`service_role`) key in either app.
+1. **Keys.** In Project Settings > API Keys, copy the project URL and the **publishable** (anon) key into `apps/clinic/.env.local`, using `.env.example` as the template. Never put the secret (`service_role`) key in the app.
 2. **Tables and rules.** Open the SQL Editor, paste all of `supabase/migrations/20261019000000_clinic.sql`, and run it. (Or with the Supabase CLI: `npx supabase link --project-ref <ref>` then `npx supabase db push`.)
 3. **Forms and templates.** In the SQL Editor, paste and run `supabase/seed.sql`.
-4. **Sign-in settings.** In Authentication > URL Configuration, set the Site URL to where the dashboard is hosted (or `http://localhost:3000` for now). Email confirmation is on by default; leave it on.
+4. **Sign-in settings.** In Authentication > URL Configuration, set the Site URL to where the web app is hosted (or `http://localhost:8081` for now), and add `newchester://**` and `<web address>/reset-password` under Redirect URLs so password-reset links open the app. Email confirmation is on by default; leave it on.
 5. **First admin.** Sign up in the patient app (or Authentication > Users > Add user), then run this in the SQL Editor with your own details:
    ```sql
    select promote_to_practitioner('you@clinic.com', 'Dr Your Name', 'Consultant Psychiatrist', 'psychiatry', true);
    ```
-6. **Practitioners.** Invite each one from Authentication > Users > Invite user, then add them by email on the dashboard's Team page.
+6. **Practitioners.** Invite each one from Authentication > Users > Invite user, then add them by email on the Team screen (More > Team).
