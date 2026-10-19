@@ -16,9 +16,11 @@ export default function AssessmentScreen() {
     () => supabase.from('assessment_assignments').select('*').eq('id', id).maybeSingle(),
     ['assessment_assignments'],
   );
+  // Read the id outside the query: the React Compiler would otherwise read it while `assignment` is still null.
+  const formId = assignment?.form_id;
   const { data: form } = useLive<AssessmentForm>(
-    assignment ? `form:${assignment.form_id}` : null,
-    () => supabase.from('assessment_forms').select('*').eq('id', assignment!.form_id).maybeSingle(),
+    formId ? `form:${formId}` : null,
+    () => supabase.from('assessment_forms').select('*').eq('id', formId!).maybeSingle(),
     [],
   );
   const [answers, setAnswers] = useState<Record<string, number>>({});

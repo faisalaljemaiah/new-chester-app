@@ -18,9 +18,11 @@ export default function Chat() {
     () => supabase.from('conversations').select('*').eq('id', id).maybeSingle(),
     [],
   );
+  // Read the id outside the query: the React Compiler would otherwise read it while `convo` is still null.
+  const practitionerId = convo?.practitioner_id;
   const { data: practitioner } = useLive<Practitioner>(
-    convo ? `practitioner:${convo.practitioner_id}` : null,
-    () => supabase.from('practitioners').select('*').eq('id', convo!.practitioner_id).maybeSingle(),
+    practitionerId ? `practitioner:${practitionerId}` : null,
+    () => supabase.from('practitioners').select('*').eq('id', practitionerId!).maybeSingle(),
     [],
   );
   // Newest first, because the list is inverted.

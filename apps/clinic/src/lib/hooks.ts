@@ -38,7 +38,8 @@ export function useLive<T>(key: string | null, fetch: Fetch<T>, tables: string[]
     void refresh();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const channel = supabase.channel(`live:${key}:${Math.random().toString(36).slice(2)}`);
-    for (const table of tableList.split(',')) {
+    // An empty list means "don't refetch on changes", not "every table".
+    for (const table of tableList.split(',').filter(Boolean)) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table }, () => {
         clearTimeout(timer);
         timer = setTimeout(() => void refresh(), 150);

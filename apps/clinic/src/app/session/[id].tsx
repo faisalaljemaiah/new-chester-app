@@ -17,9 +17,11 @@ export default function SessionScreen() {
     () => supabase.from('appointments').select('*').eq('id', id).maybeSingle(),
     ['appointments'],
   );
+  // Read the id outside the query: the React Compiler would otherwise read a.practitioner_id while `a` is still null.
+  const practitionerId = a?.practitioner_id;
   const { data: conversation } = useLive<Conversation>(
-    a ? `conversation:${a.practitioner_id}` : null,
-    () => supabase.from('conversations').select('*').eq('practitioner_id', a!.practitioner_id).maybeSingle(),
+    practitionerId ? `conversation:${practitionerId}` : null,
+    () => supabase.from('conversations').select('*').eq('practitioner_id', practitionerId!).maybeSingle(),
     [],
   );
   const now = useNow();
