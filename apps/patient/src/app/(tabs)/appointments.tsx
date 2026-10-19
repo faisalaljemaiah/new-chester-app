@@ -17,13 +17,13 @@ const statusLabel: Record<AppointmentStatus, string> = {
 
 export default function Appointments() {
   const { user } = useAuth();
-  const { data, loading } = useMyAppointments(user?.uid);
+  const { data, loading } = useMyAppointments(user?.id);
   const [tab, setTab] = useState<'upcoming' | 'past'>('upcoming');
 
   const now = Date.now();
   const upcoming = data
-    .filter((a) => a.status === 'scheduled' && a.end.toMillis() > now)
-    .sort((a, b) => a.start.toMillis() - b.start.toMillis());
+    .filter((a) => a.status === 'scheduled' && Date.parse(a.end_at) > now)
+    .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at));
   const past = data.filter((a) => !upcoming.includes(a));
   const list = tab === 'upcoming' ? upcoming : past;
 
@@ -45,11 +45,11 @@ export default function Appointments() {
       )}
       {list.map((a) => (
         <Card key={a.id} onPress={() => router.push(`/session/${a.id}`)} style={styles.row}>
-          <Avatar name={a.practitionerName} />
+          <Avatar name={a.practitioner_name} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text variant="heading">{a.practitionerName}</Text>
+            <Text variant="heading">{a.practitioner_name}</Text>
             <Text variant="small">
-              {formatDate(a.start)} · {formatTime(a.start)} · {a.mode}
+              {formatDate(a.start_at)} · {formatTime(a.start_at)} · {a.mode}
             </Text>
           </View>
           <Text variant="small" style={{ color: a.status === 'scheduled' ? colors.primary : colors.textMuted }}>

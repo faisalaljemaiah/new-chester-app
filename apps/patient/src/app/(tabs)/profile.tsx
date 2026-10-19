@@ -9,19 +9,19 @@ import { useMyAppointments, useMyAssessments } from '@/lib/queries';
 
 export default function Profile() {
   const { user, patient, signOut } = useAuth();
-  const { data: appointments } = useMyAppointments(user?.uid);
-  const { data: assessments } = useMyAssessments(user?.uid);
+  const { data: appointments } = useMyAppointments(user?.id);
+  const { data: assessments } = useMyAssessments(user?.id);
 
   const completed = appointments.filter((a) => a.status === 'completed').length;
-  const upcoming = appointments.filter((a) => a.status === 'scheduled' && a.end.toMillis() > Date.now()).length;
+  const upcoming = appointments.filter((a) => a.status === 'scheduled' && Date.parse(a.end_at) > Date.now()).length;
   const pending = assessments.filter((a) => a.status === 'sent');
   const done = assessments.filter((a) => a.status === 'completed');
 
   return (
     <Screen>
       <View style={{ alignItems: 'center', gap: spacing.sm }}>
-        <Avatar name={patient?.displayName ?? user?.displayName ?? '?'} size={84} />
-        <Text variant="title">{patient?.displayName ?? user?.displayName}</Text>
+        <Avatar name={patient?.display_name ?? '?'} size={84} />
+        <Text variant="title">{patient?.display_name}</Text>
         <Text variant="muted">{user?.email}</Text>
       </View>
 
@@ -42,8 +42,8 @@ export default function Profile() {
             <Icon ios="list.clipboard" material="assignment" color={colors.primary} size={20} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text variant="heading">{a.formTitle}</Text>
-            <Text variant="small">Sent {formatDate(a.sentAt)}</Text>
+            <Text variant="heading">{a.form_title}</Text>
+            <Text variant="small">Sent {formatDate(a.sent_at)}</Text>
           </View>
           <Icon ios="chevron.right" material="chevron_right" color={colors.textMuted} size={18} />
         </Card>
@@ -54,8 +54,8 @@ export default function Profile() {
           <SectionHeader title="Completed check-ins" />
           {done.map((a) => (
             <Card key={a.id} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <Text>{a.formCode}</Text>
-              <Text variant="small">{a.completedAt ? formatDate(a.completedAt) : ''}</Text>
+              <Text>{a.form_code}</Text>
+              <Text variant="small">{a.completed_at ? formatDate(a.completed_at) : ''}</Text>
             </Card>
           ))}
         </>

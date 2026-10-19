@@ -3,20 +3,18 @@
   "private": true,
   "workspaces": [
     "packages/*",
-    "apps/*",
-    "functions"
+    "apps/*"
   ],
   "scripts": {
     "dashboard": "npm run dev -w apps/dashboard",
     "patient": "npm run start -w apps/patient",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "emulators": "firebase emulators:start --config firebase/firebase.json --project demo-chester",
-    "test:rules": "firebase emulators:exec --config firebase/firebase.json --only firestore --project demo-chester \"tsx --test firebase/tests/rules.test.mts\""
+    "seed:sql": "tsx supabase/scripts/make-seed.mts",
+    "test:db": "tsx --test supabase/tests/*.test.mts"
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "^6.0.0",
-    "firebase": "^13.0.0",
-    "firebase-tools": "^15.34.0",
+    "@electric-sql/pglite": "^0.3.16",
+    "@chester/shared": "*",
     "tsx": "^4.20.0"
   }
 }

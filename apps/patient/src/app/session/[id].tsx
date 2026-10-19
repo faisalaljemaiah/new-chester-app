@@ -1,4 +1,4 @@
-import { colors, conversationId, radius, spacing, type Appointment } from '@chester/shared';
+import { colors, radius, spacing, type Appointment, type Conversation } from '@chester/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
@@ -6,20 +6,29 @@ import { Alert, Pressable, StyleSheet, View } from 'react-native';
 
 import { Avatar, Button, Card, Empty, Icon, Loading, Screen, Text } from '@/components/ui';
 import { formatDate, formatTime } from '@/lib/format';
-import { api } from '@/lib/firebase';
-import { useDocument } from '@/lib/hooks';
+import { useLive } from '@/lib/hooks';
+import { rpc, supabase } from '@/lib/supabase';
 
 /** Session details, modelled on the "Live Consultation" screen of the reference. */
 export default function SessionScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: a, loading } = useDocument<Appointment>(`appointments/${id}`);
+  const { data: a, loading } = useLive<Appointment>(
+    `appointment:${id}`,
+    () => supabase.from('appointments').select('*').eq('id', id).maybeSingle(),
+    ['appointments'],
+  );
+  const { data: conversation } = useLive<Conversation>(
+    a ? `conversation:${a.practitioner_id}` : null,
+    () => supabase.from('conversations').select('*').eq('practitioner_id', a!.practitioner_id).maybeSingle(),
+    [],
+  );
   const now = useNow();
 
   if (loading) return <Loading />;
   if (!a) return <Screen><Empty text="Session not found." /></Screen>;
 
-  const start = a.start.toMillis();
-  const end = a.end.toMillis();
+  const start = Date.parse(a.start_at);
+  const end = Date.parse(a.end_at);
   const live = a.status === 'scheduled' && now >= start - 10 * 60_000 && now <= end;
   const countdown = start - now;
 
@@ -29,7 +38,8 @@ export default function SessionScreen() {
       {
         text: 'Cancel session',
         style: 'destructive',
-        onPress: () => api.cancelAppointment({ appointmentId: id }).catch((e) => Alert.alert('Could not cancel', e.message)),
+        onPress: () =>
+          rpc('cancel_appointment', { p_appointment: id }).catch((e: Error) => Alert.alert('Could not cancel', e.message)),
       },
     ]);
   }
@@ -43,13 +53,13 @@ export default function SessionScreen() {
       <Card style={styles.hero}>
         <View style={{ flex: 1, gap: 6 }}>
           <Text variant="small">{live ? 'Live Consultation' : 'Your Session'}</Text>
-          <Text variant="title" style={{ fontSize: 22 }}>{a.practitionerName}</Text>
+          <Text variant="title" style={{ fontSize: 22 }}>{a.practitioner_name}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={[styles.dot, { backgroundColor: live ? colors.success : colors.textFaint }]} />
             <Text variant="small">{live ? 'Ready to join' : a.status === 'scheduled' ? 'Scheduled' : a.status}</Text>
           </View>
         </View>
-        <Avatar name={a.practitionerName} size={88} />
+        <Avatar name={a.practitioner_name} size={88} />
       </Card>
 
       <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
@@ -57,8 +67,8 @@ export default function SessionScreen() {
           <Icon ios="video.fill" material="videocam" color={colors.primary} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text variant="small">{formatDate(a.start)}</Text>
-          <Text variant="title">{formatTime(a.start)}</Text>
+          <Text variant="small">{formatDate(a.start_at)}</Text>
+          <Text variant="title">{formatTime(a.start_at)}</Text>
           <Text variant="small">
             {Math.round((end - start) / 60_000)} minutes · {a.mode}
           </Text>
@@ -75,17 +85,19 @@ export default function SessionScreen() {
         <>
           <Button
             title={live ? 'Join Session' : 'Join opens 10 minutes before'}
-            disabled={!live || !a.meetingUrl}
-            onPress={() => a.meetingUrl && WebBrowser.openBrowserAsync(a.meetingUrl)}
+            disabled={!live || !a.meeting_url}
+            onPress={() => a.meeting_url && WebBrowser.openBrowserAsync(a.meeting_url)}
           />
-          {live && !a.meetingUrl ? (
+          {live && !a.meeting_url ? (
             <Text variant="small">Your practitioner will share the session link here shortly.</Text>
           ) : null}
-          <Button
-            title="Message your practitioner"
-            variant="secondary"
-            onPress={() => router.push(`/chat/${conversationId(a.patientId, a.practitionerId)}`)}
-          />
+          {conversation ? (
+            <Button
+              title="Message your practitioner"
+              variant="secondary"
+              onPress={() => router.push(`/chat/${conversation.id}`)}
+            />
+          ) : null}
           {countdown > 0 && <Button title="Cancel session" variant="danger" onPress={cancel} />}
         </>
       )}

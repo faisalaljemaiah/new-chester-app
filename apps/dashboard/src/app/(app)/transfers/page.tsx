@@ -1,28 +1,29 @@
 "use client";
 
-import { doc, updateDoc } from "firebase/firestore";
 import Link from "next/link";
 import { useState } from "react";
 
 import { Avatar, Card, Empty, StatusBadge, Tabs } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
-import { api, db } from "@/lib/firebase";
 import { useI18n } from "@/lib/i18n";
 import { useTransfers } from "@/lib/queries";
+import { must, rpc, supabase } from "@/lib/supabase";
 
 export default function TransfersPage() {
   const { user } = useAuth();
   const { t, formatDate } = useI18n();
   const [tab, setTab] = useState<"incoming" | "outgoing">("incoming");
-  const { data: incoming } = useTransfers(user?.uid, "toPractitionerId");
-  const { data: outgoing } = useTransfers(user?.uid, "fromPractitionerId");
+  const { data: incoming } = useTransfers(user?.id, "to_practitioner_id");
+  const { data: outgoing } = useTransfers(user?.id, "from_practitioner_id");
   const [busy, setBusy] = useState<string | null>(null);
   const rows = tab === "incoming" ? incoming : outgoing;
 
   async function respond(transferId: string, accept: boolean) {
     setBusy(transferId);
     try {
-      await api.respondToTransfer({ transferId, accept });
+      await rpc("respond_to_transfer", { p_transfer: transferId, p_accept: accept });
+    } catch (e) {
+      console.error(e);
     } finally {
       setBusy(null);
     }
@@ -45,15 +46,15 @@ export default function TransfersPage() {
         {rows.length === 0 && <Empty />}
         {rows.map((x) => (
           <div key={x.id} className="list-item" style={{ alignItems: "flex-start" }}>
-            <Avatar name={x.patientName} />
+            <Avatar name={x.patient_name} />
             <div className="spacer stack" style={{ gap: 4 }}>
               <div className="row">
-                <strong>{x.patientName}</strong>
+                <strong>{x.patient_name}</strong>
                 <StatusBadge status={x.status} />
               </div>
               <div className="small muted">
-                {tab === "incoming" ? `${t("from")} ${x.fromPractitionerName}` : `${t("to")} ${x.toPractitionerName}`}
-                {x.createdAt ? ` · ${formatDate(x.createdAt.toDate())}` : ""}
+                {tab === "incoming" ? `${t("from")} ${x.from_practitioner_name}` : `${t("to")} ${x.to_practitioner_name}`}
+                {` · ${formatDate(x.created_at)}`}
               </div>
               <p className="small">
                 <span className="muted">{t("reason")}: </span>
@@ -72,12 +73,14 @@ export default function TransfersPage() {
                 </>
               )}
               {tab === "incoming" && x.status === "accepted" && (
-                <Link className="btn secondary small" href={`/patients/file?id=${x.patientId}`}>
+                <Link className="btn secondary small" href={`/patients/file?id=${x.patient_id}`}>
                   {t("openFile")}
                 </Link>
               )}
               {tab === "outgoing" && x.status === "pending" && (
-                <button className="btn ghost small" onClick={() => updateDoc(doc(db, "transfers", x.id), { status: "cancelled" })}>
+                <button className="btn ghost small" onClick={() =>
+                    must(supabase.from("transfers").update({ status: "cancelled" }).eq("id", x.id)).catch(console.error)
+                  }>
                   {t("withdraw")}
                 </button>
               )}

@@ -1,61 +1,63 @@
 "use client";
 
-import { doc, onSnapshot, type DocumentData, type Query } from "firebase/firestore";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { db } from "./firebase";
+import { supabase } from "./supabase";
 
-export type WithId<T> = T & { id: string };
+type Fetch<T> = () => PromiseLike<{ data: T | null; error: { message: string } | null }>;
 
-/** Live query results. Build the query with useMemo; pass null to skip. */
-export function useQuery<T = DocumentData>(q: Query | null) {
-  const [data, setData] = useState<WithId<T>[]>([]);
-  const [loading, setLoading] = useState(true);
+/**
+ * Runs a query and runs it again whenever one of `tables` changes (Supabase Realtime).
+ * `key` identifies the query's inputs: the query reruns when it changes, and null skips it.
+ */
+export function useLive<T>(key: string | null, fetch: Fetch<T>, tables: string[]) {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(key !== null);
   const [error, setError] = useState<Error | null>(null);
+  const fetchRef = useRef(fetch);
+  fetchRef.current = fetch;
+  const tableList = tables.join(",");
+
+  const refresh = useCallback(async () => {
+    const { data, error } = await fetchRef.current();
+    if (error) {
+      console.error(error);
+      setError(new Error(error.message));
+    } else {
+      setData(data);
+      setError(null);
+    }
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    if (!q) {
-      setData([]);
+    if (key === null) {
+      setData(null);
       setLoading(false);
       return;
     }
     setLoading(true);
-    return onSnapshot(
-      q,
-      (snap) => {
-        setData(snap.docs.map((d) => ({ id: d.id, ...(d.data() as T) })));
-        setLoading(false);
-      },
-      (e) => {
-        console.error(e);
-        setError(e);
-        setLoading(false);
-      },
-    );
-  }, [q]);
+    void refresh();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const channel = supabase.channel(`live:${key}:${Math.random().toString(36).slice(2)}`);
+    for (const table of tableList.split(",")) {
+      channel.on("postgres_changes", { event: "*", schema: "public", table }, () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => void refresh(), 150);
+      });
+    }
+    channel.subscribe();
+    return () => {
+      clearTimeout(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [key, tableList, refresh]);
 
-  return { data, loading, error };
+  return { data, loading, error, refresh };
 }
 
-/** Live single document. Pass null to skip. */
-export function useDocument<T = DocumentData>(path: string | null) {
-  const [data, setData] = useState<WithId<T> | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!path) {
-      setLoading(false);
-      return;
-    }
-    return onSnapshot(
-      doc(db, path),
-      (snap) => {
-        setData(snap.exists() ? { id: snap.id, ...(snap.data() as T) } : null);
-        setLoading(false);
-      },
-      () => setLoading(false),
-    );
-  }, [path]);
-
-  return { data, loading };
+/** useLive for lists: data is never null. */
+export function useRows<T>(key: string | null, fetch: Fetch<T[]>, tables: string[]) {
+  const live = useLive<T[]>(key, fetch, tables);
+  return { ...live, data: live.data ?? [] };
 }

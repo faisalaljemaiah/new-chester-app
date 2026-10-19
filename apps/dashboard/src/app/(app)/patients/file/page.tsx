@@ -1,40 +1,26 @@
 "use client";
 
-import {
-  conversationId,
-  type Appointment,
-  type AssessmentAssignment,
-  type AssessmentResult,
-  type ChatMessage,
-  type ClinicalNote,
-  type Conversation,
-  type MessageTemplate,
-  type Patient,
-  type PatientStatus,
-  type PatientTask,
+import type {
+  Appointment,
+  AssessmentAssignment,
+  AssessmentResult,
+  ChatMessage,
+  ClinicalNote,
+  Conversation,
+  Patient,
+  PatientStatus,
+  PatientTask,
 } from "@chester/shared";
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  orderBy,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-  writeBatch,
-} from "firebase/firestore";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
 
 import { ScoreChart } from "@/components/ScoreChart";
 import { Avatar, Card, Empty, Modal, SeverityBadge, StatusBadge, Tabs } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import { useDocument, useQuery, type WithId } from "@/lib/hooks";
+import { useLive, useRows } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { useForms, usePractitioners, useTemplates } from "@/lib/queries";
+import { must, rpc, supabase } from "@/lib/supabase";
 
 type Tab = "progress" | "notes" | "tasks" | "assessments" | "messages" | "sessions";
 
@@ -52,41 +38,49 @@ function PatientFile() {
   const { t, formatDate } = useI18n();
   const [tab, setTab] = useState<Tab>((params.get("tab") as Tab) ?? "progress");
   const [transferOpen, setTransferOpen] = useState(false);
-  const { data: patient, loading } = useDocument<Patient>(patientId ? `patients/${patientId}` : null);
-  const { data: practitioners } = usePractitioners();
-
-  const apptQ = useMemo(
-    () => (patientId ? query(collection(db, "appointments"), where("patientId", "==", patientId), orderBy("start", "desc")) : null),
-    [patientId],
+  const { data: patient, loading } = useLive<Patient>(
+    patientId ? `patient:${patientId}` : null,
+    () => supabase.from("patients").select("*").eq("id", patientId).maybeSingle(),
+    ["patients"],
   );
-  const { data: appointments } = useQuery<Appointment>(apptQ);
+  const { data: practitioners } = usePractitioners();
+  const { data: appointments } = useRows<Appointment>(
+    patientId ? `patient-appointments:${patientId}` : null,
+    () =>
+      supabase.from("appointments").select("*").eq("patient_id", patientId).order("start_at", { ascending: false }),
+    ["appointments"],
+  );
 
   if (loading) return <p className="muted">{t("loading")}</p>;
   if (!patient) return <Empty />;
 
-  const upcoming = appointments.filter((a) => a.status === "scheduled" && a.end.toMillis() > Date.now());
-  const primary = practitioners.find((p) => p.id === patient.primaryPractitionerId);
+  const upcoming = appointments.filter((a) => a.status === "scheduled" && Date.parse(a.end_at) > Date.now());
+  const primary = practitioners.find((p) => p.id === patient.primary_practitioner_id);
 
   return (
     <>
       <Card>
         <div className="row" style={{ flexWrap: "wrap", gap: 20 }}>
-          <Avatar name={patient.displayName} large />
+          <Avatar name={patient.display_name} large />
           <div className="spacer stack" style={{ gap: 4 }}>
-            <h1>{patient.displayName}</h1>
+            <h1>{patient.display_name}</h1>
             <div className="small muted" dir="ltr" style={{ textAlign: "start" }}>
               {patient.email}
               {patient.phone ? ` · ${patient.phone}` : ""}
             </div>
             <div className="row small muted">
-              {t("primaryPractitioner")}: {primary?.displayName ?? "—"}
+              {t("primaryPractitioner")}: {primary?.display_name ?? "—"}
             </div>
           </div>
           <select
             className="select"
             style={{ width: "auto" }}
             value={patient.status}
-            onChange={(e) => updateDoc(doc(db, "patients", patientId), { status: e.target.value as PatientStatus })}>
+            onChange={(e) =>
+              must(
+                supabase.from("patients").update({ status: e.target.value as PatientStatus }).eq("id", patientId),
+              ).catch(console.error)
+            }>
             {(["active", "on_hold", "discharged"] as const).map((s) => (
               <option key={s} value={s}>
                 {t(s)}
@@ -98,11 +92,11 @@ function PatientFile() {
           </button>
         </div>
         <div className="grid grid-3" style={{ marginTop: 20 }}>
-          <MiniStat label={t("sessionsDone")} value={String(patient.completedSessions ?? 0)} />
+          <MiniStat label={t("sessionsDone")} value={String(patient.completed_sessions ?? 0)} />
           <MiniStat label={t("upcomingSessions")} value={String(upcoming.length)} />
           <MiniStat
             label={t("lastSession")}
-            value={patient.lastSessionAt ? formatDate(patient.lastSessionAt.toDate()) : "—"}
+            value={patient.last_session_at ? formatDate(patient.last_session_at) : "—"}
           />
         </div>
       </Card>
@@ -123,11 +117,11 @@ function PatientFile() {
       {tab === "progress" && <ProgressTab patientId={patientId} appointments={appointments} />}
       {tab === "notes" && <NotesTab patientId={patientId} />}
       {tab === "tasks" && <TasksTab patientId={patientId} />}
-      {tab === "assessments" && <AssessmentsTab patientId={patientId} patient={patient} />}
-      {tab === "messages" && <MessagesTab patientId={patientId} patient={patient} />}
+      {tab === "assessments" && <AssessmentsTab patientId={patientId} />}
+      {tab === "messages" && <MessagesTab patientId={patientId} />}
       {tab === "sessions" && <SessionsTab appointments={appointments} />}
 
-      {transferOpen && <TransferModal patientId={patientId} patient={patient} onClose={() => setTransferOpen(false)} />}
+      {transferOpen && <TransferModal patientId={patientId} onClose={() => setTransferOpen(false)} />}
     </>
   );
 }
@@ -144,20 +138,35 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 // ---------------------------------------------------------------------------
 
 function useResults(patientId: string) {
-  const q = useMemo(
-    () => query(collection(db, "assessmentResults"), where("patientId", "==", patientId), orderBy("completedAt", "asc")),
-    [patientId],
+  return useRows<AssessmentResult>(
+    `patient-results:${patientId}`,
+    () => supabase.from("assessment_results").select("*").eq("patient_id", patientId).order("completed_at"),
+    ["assessment_results"],
   );
-  return useQuery<AssessmentResult>(q);
 }
 
-function ProgressTab({ patientId, appointments }: { patientId: string; appointments: WithId<Appointment>[] }) {
+/** This practitioner's conversation with the patient, opened by booking or an accepted transfer. */
+function useConversation(patientId: string, practitionerId: string | undefined) {
+  return useLive<Conversation>(
+    practitionerId ? `conversation:${patientId}:${practitionerId}` : null,
+    () =>
+      supabase
+        .from("conversations")
+        .select("*")
+        .eq("patient_id", patientId)
+        .eq("practitioner_id", practitionerId!)
+        .maybeSingle(),
+    ["conversations"],
+  );
+}
+
+function ProgressTab({ patientId, appointments }: { patientId: string; appointments: Appointment[] }) {
   const { t } = useI18n();
   const { data: results } = useResults(patientId);
   const { data: forms } = useForms();
 
-  const byForm = new Map<string, WithId<AssessmentResult>[]>();
-  for (const r of results) byForm.set(r.formId, [...(byForm.get(r.formId) ?? []), r]);
+  const byForm = new Map<string, AssessmentResult[]>();
+  for (const r of results) byForm.set(r.form_id, [...(byForm.get(r.form_id) ?? []), r]);
 
   const counts = {
     completed: appointments.filter((a) => a.status === "completed").length,
@@ -174,9 +183,9 @@ function ProgressTab({ patientId, appointments }: { patientId: string; appointme
           return (
             <ScoreChart
               key={formId}
-              title={form?.code ?? rs[0].formCode}
+              title={form?.code ?? rs[0].form_code}
               results={rs}
-              maxScore={rs[0].maxScore}
+              maxScore={rs[0].max_score}
               bands={form?.bands ?? []}
             />
           );
@@ -198,20 +207,19 @@ function ProgressTab({ patientId, appointments }: { patientId: string; appointme
 // ---------------------------------------------------------------------------
 
 function NotesTab({ patientId }: { patientId: string }) {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { t, formatDate, formatTime } = useI18n();
-  const q = useMemo(() => query(collection(db, "patients", patientId, "notes"), orderBy("createdAt", "desc")), [patientId]);
-  const { data: notes } = useQuery<ClinicalNote>(q);
+  const { data: notes } = useRows<ClinicalNote>(
+    `notes:${patientId}`,
+    () => supabase.from("notes").select("*").eq("patient_id", patientId).order("created_at", { ascending: false }),
+    ["notes"],
+  );
   const [body, setBody] = useState("");
 
   async function add() {
     if (!body.trim() || !user) return;
-    await addDoc(collection(db, "patients", patientId, "notes"), {
-      authorId: user.uid,
-      authorName: profile?.displayName ?? user.email,
-      body: body.trim(),
-      createdAt: serverTimestamp(),
-    });
+    // The author and their name are filled in by the database.
+    await must(supabase.from("notes").insert({ patient_id: patientId, body: body.trim() }));
     setBody("");
   }
 
@@ -229,13 +237,13 @@ function NotesTab({ patientId }: { patientId: string }) {
         {notes.map((n) => (
           <div key={n.id} className="card" style={{ background: "var(--surface-raised)", padding: 16 }}>
             <div className="row small muted" style={{ marginBottom: 6 }}>
-              <strong style={{ color: "var(--text)" }}>{n.authorName}</strong>
-              <span>
-                {n.createdAt ? `${formatDate(n.createdAt.toDate())} · ${formatTime(n.createdAt.toDate())}` : ""}
-              </span>
+              <strong style={{ color: "var(--text)" }}>{n.author_name}</strong>
+              <span>{`${formatDate(n.created_at)} · ${formatTime(n.created_at)}`}</span>
               <span className="spacer" />
-              {n.authorId === user?.uid && (
-                <button className="btn ghost small" onClick={() => deleteDoc(doc(db, "patients", patientId, "notes", n.id))}>
+              {n.author_id === user?.id && (
+                <button
+                  className="btn ghost small"
+                  onClick={() => must(supabase.from("notes").delete().eq("id", n.id)).catch(console.error)}>
                   {t("delete")}
                 </button>
               )}
@@ -253,20 +261,17 @@ function NotesTab({ patientId }: { patientId: string }) {
 function TasksTab({ patientId }: { patientId: string }) {
   const { user } = useAuth();
   const { t } = useI18n();
-  const q = useMemo(() => query(collection(db, "patients", patientId, "tasks"), orderBy("createdAt", "desc")), [patientId]);
-  const { data: tasks } = useQuery<PatientTask>(q);
+  const { data: tasks } = useRows<PatientTask>(
+    `tasks:${patientId}`,
+    () => supabase.from("tasks").select("*").eq("patient_id", patientId).order("created_at", { ascending: false }),
+    ["tasks"],
+  );
   const [title, setTitle] = useState("");
   const [dueDate, setDueDate] = useState("");
 
   async function add() {
     if (!title.trim() || !user) return;
-    await addDoc(collection(db, "patients", patientId, "tasks"), {
-      authorId: user.uid,
-      title: title.trim(),
-      done: false,
-      ...(dueDate ? { dueDate } : {}),
-      createdAt: serverTimestamp(),
-    });
+    await must(supabase.from("tasks").insert({ patient_id: patientId, title: title.trim(), due_date: dueDate || null }));
     setTitle("");
     setDueDate("");
   }
@@ -296,12 +301,16 @@ function TasksTab({ patientId }: { patientId: string }) {
               <input
                 type="checkbox"
                 checked={task.done}
-                onChange={() => updateDoc(doc(db, "patients", patientId, "tasks", task.id), { done: !task.done })}
+                onChange={() =>
+                  must(supabase.from("tasks").update({ done: !task.done }).eq("id", task.id)).catch(console.error)
+                }
               />
               <span className={task.done ? "done" : ""}>{task.title}</span>
             </label>
-            {task.dueDate && <span className="badge neutral">{task.dueDate}</span>}
-            <button className="btn ghost small" onClick={() => deleteDoc(doc(db, "patients", patientId, "tasks", task.id))}>
+            {task.due_date && <span className="badge neutral">{task.due_date}</span>}
+            <button
+              className="btn ghost small"
+              onClick={() => must(supabase.from("tasks").delete().eq("id", task.id)).catch(console.error)}>
               {t("delete")}
             </button>
           </div>
@@ -313,66 +322,41 @@ function TasksTab({ patientId }: { patientId: string }) {
 
 // ---------------------------------------------------------------------------
 
-/** Creates the assignment and posts it in the chat so the patient can open it from the app. */
-async function sendAssessment(opts: {
-  patientId: string;
-  patientName: string;
-  practitionerId: string;
-  formId: string;
-  formCode: string;
-  formTitle: string;
-  text: string;
-  templateId?: string;
-}) {
-  const batch = writeBatch(db);
-  const assignmentRef = doc(collection(db, "assessmentAssignments"));
-  batch.set(assignmentRef, {
-    patientId: opts.patientId,
-    patientName: opts.patientName,
-    practitionerId: opts.practitionerId,
-    formId: opts.formId,
-    formCode: opts.formCode,
-    formTitle: opts.formTitle,
-    status: "sent",
-    sentAt: serverTimestamp(),
+/** Creates the assignment and posts it in the chat, in one step, so the patient can open it from the app. */
+async function sendAssessment(opts: { patientId: string; formId: string; text: string; templateId?: string }) {
+  await rpc<string>("send_assessment", {
+    p_patient: opts.patientId,
+    p_form: opts.formId,
+    p_text: opts.text,
+    p_template: opts.templateId ?? null,
   });
-  batch.set(doc(collection(db, "conversations", conversationId(opts.patientId, opts.practitionerId), "messages")), {
-    senderId: opts.practitionerId,
-    text: opts.text,
-    assessmentAssignmentId: assignmentRef.id,
-    ...(opts.templateId ? { templateId: opts.templateId } : {}),
-    createdAt: serverTimestamp(),
-  });
-  await batch.commit();
 }
 
-function AssessmentsTab({ patientId, patient }: { patientId: string; patient: Patient }) {
+function AssessmentsTab({ patientId }: { patientId: string }) {
   const { user } = useAuth();
   const { t, formatDate } = useI18n();
   const { data: forms } = useForms();
   const { data: results } = useResults(patientId);
-  const q = useMemo(
-    () => query(collection(db, "assessmentAssignments"), where("patientId", "==", patientId), orderBy("sentAt", "desc")),
-    [patientId],
+  const { data: convo, loading: convoLoading } = useConversation(patientId, user?.id);
+  const { data: assignments } = useRows<AssessmentAssignment>(
+    `assignments:${patientId}`,
+    () =>
+      supabase
+        .from("assessment_assignments")
+        .select("*")
+        .eq("patient_id", patientId)
+        .order("sent_at", { ascending: false }),
+    ["assessment_assignments"],
   );
-  const { data: assignments } = useQuery<AssessmentAssignment>(q);
   const [formId, setFormId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   async function send() {
     const form = forms.find((f) => f.id === formId);
-    if (!form || !user) return;
+    if (!form || !user || !convo) return;
     setError(null);
     try {
-      await sendAssessment({
-        patientId,
-        patientName: patient.displayName,
-        practitionerId: user.uid,
-        formId: form.id,
-        formCode: form.code,
-        formTitle: form.title,
-        text: form.instructions,
-      });
+      await sendAssessment({ patientId, formId: form.id, text: form.instructions });
       setFormId("");
     } catch {
       setError(t("error"));
@@ -391,32 +375,34 @@ function AssessmentsTab({ patientId, patient }: { patientId: string; patient: Pa
               </option>
             ))}
           </select>
-          <button className="btn" onClick={send} disabled={!formId}>
+          <button className="btn" onClick={send} disabled={!formId || !convo}>
             {t("sendAssessment")}
           </button>
         </div>
+        {/* The form is delivered as a chat message, so it needs a conversation with this patient. */}
+        {!convoLoading && !convo && <div className="notice small">{t("noConversation")}</div>}
         {error && <div className="alert small">{error}</div>}
         {assignments.length === 0 && <Empty />}
         <table className="table">
           <tbody>
             {assignments.map((a) => {
-              const r = results.find((x) => x.id === a.id);
+              const r = results.find((x) => x.assignment_id === a.id);
               return (
                 <tr key={a.id}>
                   <td>
-                    <strong>{a.formCode}</strong>
+                    <strong>{a.form_code}</strong>
                   </td>
                   <td className="small muted">
-                    {t("sent")} {a.sentAt ? formatDate(a.sentAt.toDate()) : ""}
+                    {t("sent")} {formatDate(a.sent_at)}
                   </td>
                   <td>
                     {r ? (
                       <div className="row">
                         <span>
-                          {t("score")} <strong>{r.score}</strong>/{r.maxScore}
+                          {t("score")} <strong>{r.score}</strong>/{r.max_score}
                         </span>
-                        <SeverityBadge level={r.severityLevel} label={r.severity} />
-                        {r.safetyFlag && <span className="badge danger">⚠ {t("safetyAlerts")}</span>}
+                        <SeverityBadge level={r.severity_level} label={r.severity} />
+                        {r.safety_flag && <span className="badge danger">⚠ {t("safetyAlerts")}</span>}
                       </div>
                     ) : (
                       <span className="badge warning">{t("waitingForPatient")}</span>
@@ -427,7 +413,13 @@ function AssessmentsTab({ patientId, patient }: { patientId: string; patient: Pa
                       (r.reviewed ? (
                         <span className="badge success">{t("reviewed")}</span>
                       ) : (
-                        <button className="btn secondary small" onClick={() => updateDoc(doc(db, "assessmentResults", r.id), { reviewed: true })}>
+                        <button
+                          className="btn secondary small"
+                          onClick={() =>
+                            must(
+                              supabase.from("assessment_results").update({ reviewed: true }).eq("assignment_id", r.assignment_id),
+                            ).catch(console.error)
+                          }>
                           {t("markReviewed")}
                         </button>
                       ))}
@@ -444,50 +436,38 @@ function AssessmentsTab({ patientId, patient }: { patientId: string; patient: Pa
 
 // ---------------------------------------------------------------------------
 
-function MessagesTab({ patientId, patient }: { patientId: string; patient: Patient }) {
+function MessagesTab({ patientId }: { patientId: string }) {
   const { user } = useAuth();
   const { t, formatDate, formatTime } = useI18n();
-  const cid = user ? conversationId(patientId, user.uid) : null;
-  const { data: convo, loading } = useDocument<Conversation>(cid ? `conversations/${cid}` : null);
-  const q = useMemo(
-    () => (cid && convo ? query(collection(db, "conversations", cid, "messages"), orderBy("createdAt", "asc")) : null),
-    [cid, convo],
+  const { data: convo, loading } = useConversation(patientId, user?.id);
+  const cid = convo?.id ?? null;
+  const { data: messages } = useRows<ChatMessage>(
+    cid ? `messages:${cid}` : null,
+    () => supabase.from("messages").select("*").eq("conversation_id", cid!).order("created_at"),
+    ["messages"],
   );
-  const { data: messages } = useQuery<ChatMessage>(q);
-  const { data: templates } = useTemplates(user?.uid);
+  const { data: templates } = useTemplates(user?.id);
   const { data: forms } = useForms();
   const [text, setText] = useState("");
   const [templateId, setTemplateId] = useState("");
 
   if (loading) return null;
   // The conversation is opened when the patient books with you or you accept a transfer.
-  if (!convo || !cid || !user) return <Card><Empty /></Card>;
+  if (!convo || !cid || !user) return <Card><Empty text={t("noConversation")} /></Card>;
 
   async function send() {
     if (!user || !cid) return;
-    const template = templates.find((x) => x.id === templateId) as WithId<MessageTemplate> | undefined;
+    const template = templates.find((x) => x.id === templateId);
     const body = text.trim();
     if (!body) return;
-    if (template?.kind === "assessment" && template.formId) {
-      const form = forms.find((f) => f.id === template.formId);
+    if (template?.kind === "assessment" && template.form_id) {
+      const form = forms.find((f) => f.id === template.form_id);
       if (!form) return;
-      await sendAssessment({
-        patientId,
-        patientName: patient.displayName,
-        practitionerId: user.uid,
-        formId: form.id,
-        formCode: form.code,
-        formTitle: form.title,
-        text: body,
-        templateId: template.id,
-      });
+      await sendAssessment({ patientId, formId: form.id, text: body, templateId: template.id });
     } else {
-      await addDoc(collection(db, "conversations", cid, "messages"), {
-        senderId: user.uid,
-        text: body,
-        ...(template ? { templateId: template.id } : {}),
-        createdAt: serverTimestamp(),
-      });
+      await must(
+        supabase.from("messages").insert({ conversation_id: cid, text: body, template_id: template?.id ?? null }),
+      );
     }
     setText("");
     setTemplateId("");
@@ -499,11 +479,11 @@ function MessagesTab({ patientId, patient }: { patientId: string; patient: Patie
         <div className="chat-log">
           {messages.length === 0 && <Empty />}
           {messages.map((m) => (
-            <div key={m.id} className={`bubble ${m.senderId === user.uid ? "mine" : "theirs"}`}>
+            <div key={m.id} className={`bubble ${m.sender_id === user.id ? "mine" : "theirs"}`}>
               {m.text}
-              {m.assessmentAssignmentId && <div className="small">📋 {t("assessmentTemplate")}</div>}
+              {m.assessment_assignment_id && <div className="small">📋 {t("assessmentTemplate")}</div>}
               <div className="small" style={{ opacity: 0.7 }}>
-                {m.createdAt ? `${formatDate(m.createdAt.toDate())} ${formatTime(m.createdAt.toDate())}` : ""}
+                {`${formatDate(m.created_at)} ${formatTime(m.created_at)}`}
               </div>
             </div>
           ))}
@@ -537,7 +517,7 @@ function MessagesTab({ patientId, patient }: { patientId: string; patient: Patie
 
 // ---------------------------------------------------------------------------
 
-function SessionsTab({ appointments }: { appointments: WithId<Appointment>[] }) {
+function SessionsTab({ appointments }: { appointments: Appointment[] }) {
   const { t, formatDate, formatTime } = useI18n();
   return (
     <Card>
@@ -557,9 +537,9 @@ function SessionsTab({ appointments }: { appointments: WithId<Appointment>[] }) 
           <tbody>
             {appointments.map((a) => (
               <tr key={a.id}>
-                <td>{formatDate(a.start.toDate())}</td>
-                <td>{formatTime(a.start.toDate())}</td>
-                <td>{a.practitionerName}</td>
+                <td>{formatDate(a.start_at)}</td>
+                <td>{formatTime(a.start_at)}</td>
+                <td>{a.practitioner_name}</td>
                 <td>{t(a.mode)}</td>
                 <td>
                   <StatusBadge status={a.status} />
@@ -575,8 +555,8 @@ function SessionsTab({ appointments }: { appointments: WithId<Appointment>[] }) 
 
 // ---------------------------------------------------------------------------
 
-function TransferModal({ patientId, patient, onClose }: { patientId: string; patient: Patient; onClose: () => void }) {
-  const { user, profile } = useAuth();
+function TransferModal({ patientId, onClose }: { patientId: string; onClose: () => void }) {
+  const { user } = useAuth();
   const { t, locale } = useI18n();
   const { data: practitioners } = usePractitioners();
   const [to, setTo] = useState("");
@@ -585,24 +565,21 @@ function TransferModal({ patientId, patient, onClose }: { patientId: string; pat
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const others = practitioners.filter((p) => p.id !== user?.uid);
+  const others = practitioners.filter((p) => p.id !== user?.id);
   const target = others.find((p) => p.id === to);
 
   async function submit() {
     if (!user || !target) return;
     try {
-      await addDoc(collection(db, "transfers"), {
-        patientId,
-        patientName: patient.displayName,
-        fromPractitionerId: user.uid,
-        fromPractitionerName: profile?.displayName ?? user.email,
-        toPractitionerId: target.id,
-        toPractitionerName: target.displayName,
-        reason: reason.trim(),
-        keepAccess,
-        status: "pending",
-        createdAt: serverTimestamp(),
-      });
+      // The sender and everyone's names are filled in by the database.
+      await must(
+        supabase.from("transfers").insert({
+          patient_id: patientId,
+          to_practitioner_id: target.id,
+          reason: reason.trim(),
+          keep_access: keepAccess,
+        }),
+      );
       setDone(true);
     } catch {
       setError(t("error"));
@@ -626,7 +603,7 @@ function TransferModal({ patientId, patient, onClose }: { patientId: string; pat
               <option value="">—</option>
               {others.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {(locale === "ar" && p.displayNameAr) || p.displayName} · {t(p.discipline)}
+                  {(locale === "ar" && p.display_name_ar) || p.display_name} · {t(p.discipline)}
                 </option>
               ))}
             </select>

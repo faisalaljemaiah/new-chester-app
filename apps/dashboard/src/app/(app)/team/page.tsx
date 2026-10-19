@@ -5,16 +5,17 @@ import { useState } from "react";
 
 import { Avatar, Card } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
-import { api } from "@/lib/firebase";
 import { useI18n } from "@/lib/i18n";
 import { usePractitioners } from "@/lib/queries";
+import { rpc } from "@/lib/supabase";
 
 export default function TeamPage() {
   const { isAdmin } = useAuth();
   const { t, locale } = useI18n();
-  const { data: practitioners } = usePractitioners();
+  // The directory isn't broadcast by Realtime, so reload it after adding someone.
+  const { data: practitioners, refresh } = usePractitioners();
   const [form, setForm] = useState({ email: "", displayName: "", title: "", discipline: "psychiatry" as Discipline, admin: false });
-  const [link, setLink] = useState<string | null>(null);
+  const [added, setAdded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -23,9 +24,18 @@ export default function TeamPage() {
   async function submit() {
     setBusy(true);
     setError(null);
+    setAdded(false);
     try {
-      const { data } = await api.createPractitioner(form);
-      setLink(data.setPasswordLink);
+      // Turns an existing account into a practitioner; the database explains if there's no account yet.
+      await rpc<string>("promote_to_practitioner", {
+        p_email: form.email.trim(),
+        p_display_name: form.displayName.trim(),
+        p_title: form.title.trim(),
+        p_discipline: form.discipline,
+        p_make_admin: form.admin,
+      });
+      setAdded(true);
+      await refresh();
       setForm({ email: "", displayName: "", title: "", discipline: "psychiatry", admin: false });
     } catch (e) {
       setError((e as Error).message || t("error"));
@@ -42,6 +52,7 @@ export default function TeamPage() {
       <div className="grid grid-2">
         <Card title={t("addPractitioner")}>
           <div className="stack">
+            <p className="small muted">{t("inviteFirst")}</p>
             <label className="label">
               {t("name")}
               <input className="input" value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} />
@@ -69,23 +80,15 @@ export default function TeamPage() {
             <button className="btn" onClick={submit} disabled={busy || !form.email || !form.displayName || !form.title}>
               {t("addPractitioner")}
             </button>
-            {link && (
-              <div className="notice stack small">
-                {t("setPasswordLink")}
-                <code dir="ltr" style={{ wordBreak: "break-all" }}>{link}</code>
-                <button className="btn secondary small" onClick={() => navigator.clipboard.writeText(link)}>
-                  {t("copy")}
-                </button>
-              </div>
-            )}
+            {added && <div className="notice small">{t("practitionerAdded")}</div>}
           </div>
         </Card>
         <Card title={t("navTeam")}>
           {practitioners.map((p) => (
             <div key={p.id} className="list-item">
-              <Avatar name={p.displayName} />
+              <Avatar name={p.display_name} />
               <div className="spacer">
-                <strong>{(locale === "ar" && p.displayNameAr) || p.displayName}</strong>
+                <strong>{(locale === "ar" && p.display_name_ar) || p.display_name}</strong>
                 <div className="small muted">
                   {p.title} · {t(p.discipline)}
                 </div>

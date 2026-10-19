@@ -15,9 +15,12 @@ const frequency = [
 const q = (id: string, text: string) => ({ id, text, options: frequency });
 
 export const PHQ9: AssessmentForm = {
+  id: "phq9",
   code: "PHQ-9",
   title: "Patient Health Questionnaire (PHQ-9)",
+  title_ar: null,
   instructions: "Over the last 2 weeks, how often have you been bothered by any of the following problems?",
+  instructions_ar: null,
   questions: [
     q("q1", "Little interest or pleasure in doing things"),
     q("q2", "Feeling down, depressed, or hopeless"),
@@ -39,14 +42,17 @@ export const PHQ9: AssessmentForm = {
     { min: 15, max: 19, label: "Moderately severe", level: 3 },
     { min: 20, max: 27, label: "Severe", level: 4 },
   ],
-  safetyItems: ["q9"],
+  safety_items: ["q9"],
   active: true,
 };
 
 export const GAD7: AssessmentForm = {
+  id: "gad7",
   code: "GAD-7",
   title: "Generalized Anxiety Disorder (GAD-7)",
+  title_ar: null,
   instructions: "Over the last 2 weeks, how often have you been bothered by the following problems?",
+  instructions_ar: null,
   questions: [
     q("q1", "Feeling nervous, anxious, or on edge"),
     q("q2", "Not being able to stop or control worrying"),
@@ -62,6 +68,7 @@ export const GAD7: AssessmentForm = {
     { min: 10, max: 14, label: "Moderate", level: 2 },
     { min: 15, max: 21, label: "Severe", level: 4 },
   ],
+  safety_items: [],
   active: true,
 };
 
@@ -75,7 +82,7 @@ export interface ScoreResult {
   missing: string[];
 }
 
-/** Sums the answers and finds the severity band. Used by the scoring Cloud Function. */
+/** Sums the answers and finds the severity band. Mirrors submit_assessment() in the database. */
 export function scoreAssessment(form: AssessmentForm, answers: Record<string, number>): ScoreResult {
   const missing: string[] = [];
   let score = 0;
@@ -89,7 +96,7 @@ export function scoreAssessment(form: AssessmentForm, answers: Record<string, nu
     score += value;
   }
   const band = form.bands.find((b) => score >= b.min && score <= b.max);
-  const safetyFlag = (form.safetyItems ?? []).some((id) => (answers[id] ?? 0) > 0);
+  const safetyFlag = form.safety_items.some((id) => (answers[id] ?? 0) > 0);
   const maxScore = form.questions.reduce((sum, q) => sum + Math.max(...q.options.map((o) => o.value)), 0);
   return { score, maxScore, band, safetyFlag, missing };
 }

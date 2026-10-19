@@ -1,189 +1,205 @@
-// Firestore document shapes shared by the patient app, the dashboard and Cloud Functions.
-// Collection paths are listed in COLLECTIONS so every client uses the same names.
+// Row shapes of the Supabase tables in supabase/migrations, shared by the patient app and the
+// dashboard. Field names match the database columns. Timestamps arrive as ISO strings.
 
-/** Works with both the client SDK and the Admin SDK Timestamp classes. */
-export interface TimestampLike {
-  seconds: number;
-  nanoseconds: number;
-  toDate(): Date;
-  toMillis(): number;
-}
+export type Timestamp = string;
+/** yyyy-mm-dd */
+export type IsoDate = string;
 
-export const COLLECTIONS = {
-  users: "users",
+export const TABLES = {
+  profiles: "profiles",
   practitioners: "practitioners",
   patients: "patients",
-  notes: "notes", // subcollection of patients/{patientId}
-  tasks: "tasks", // subcollection of patients/{patientId}
+  careTeam: "care_team",
+  notes: "notes",
+  tasks: "tasks",
   appointments: "appointments",
   transfers: "transfers",
-  availabilityRequests: "availabilityRequests",
+  availabilityRequests: "availability_requests",
   templates: "templates",
-  assessmentForms: "assessmentForms",
-  assessmentAssignments: "assessmentAssignments",
-  assessmentResults: "assessmentResults",
-  bookedSlots: "bookedSlots", // {practitionerId}_{yyyy-mm-dd} -> { times: ["09:00"] }, no patient details
+  assessmentForms: "assessment_forms",
+  assessmentAssignments: "assessment_assignments",
+  assessmentResults: "assessment_results",
   conversations: "conversations",
-  messages: "messages", // subcollection of conversations/{conversationId}
+  messages: "messages",
 } as const;
 
 export type Role = "patient" | "practitioner" | "admin";
 export type Locale = "en" | "ar";
 
-/** users/{uid}. Role is mirrored from the auth custom claim, which is what security rules trust. */
-export interface UserProfile {
+/** Every signed-in user has one. Only database functions change the role. */
+export interface Profile {
+  id: string;
   role: Role;
-  displayName: string;
+  display_name: string;
   email: string;
   locale: Locale;
-  photoUrl?: string;
-  createdAt: TimestampLike;
+  photo_url: string | null;
+  created_at: Timestamp;
 }
 
 export type Discipline = "psychiatry" | "psychology";
 
-/** Weekly working hours, keyed by weekday (0 = Sunday). Times are "HH:mm" in the practitioner's time zone. */
-export type WeeklyHours = Partial<Record<0 | 1 | 2 | 3 | 4 | 5 | 6, { start: string; end: string }[]>>;
+export interface TimeWindow {
+  start: string; // HH:mm in the practitioner's time zone
+  end: string;
+}
 
-/** practitioners/{uid}. Public profile that patients can read. */
+/** Weekly working hours keyed by weekday, "0" = Sunday. */
+export type WeeklyHours = Partial<Record<string, TimeWindow[]>>;
+
+/** Public profile that patients can read. */
 export interface Practitioner {
-  displayName: string;
-  displayNameAr?: string;
+  id: string;
+  display_name: string;
+  display_name_ar: string | null;
   discipline: Discipline;
   title: string; // e.g. "Consultant Psychiatrist"
-  titleAr?: string;
-  bio?: string;
-  bioAr?: string;
-  photoUrl?: string;
+  title_ar: string | null;
+  bio: string | null;
+  bio_ar: string | null;
+  photo_url: string | null;
   languages: Locale[];
-  sessionMinutes: number;
-  timeZone: string; // IANA, e.g. "Asia/Riyadh"
-  weeklyHours: WeeklyHours;
-  /** Date ranges blocked by approved "not available" requests. ISO dates (yyyy-mm-dd), inclusive. */
-  blockedRanges: { from: string; to: string }[];
+  session_minutes: number;
+  time_zone: string; // IANA, e.g. "Asia/Riyadh"
+  weekly_hours: WeeklyHours;
+  /** Date ranges blocked by approved "not available" requests, inclusive. */
+  blocked_ranges: { from: IsoDate; to: IsoDate }[];
   /** Extra dates opened by approved "available" requests. */
-  extraDays: { date: string; start: string; end: string }[];
+  extra_days: ({ date: IsoDate } & TimeWindow)[];
   active: boolean;
 }
 
 export type PatientStatus = "active" | "on_hold" | "discharged";
 
-/** patients/{uid}. Readable by the patient and by practitioners on their care team. */
+/** The patient file. Readable by the patient and by practitioners on their care team. */
 export interface Patient {
-  displayName: string;
+  id: string;
+  display_name: string;
   email: string;
-  phone?: string;
-  dateOfBirth?: string;
-  gender?: "female" | "male";
-  primaryPractitionerId: string | null;
-  /** Practitioner uids allowed to see this file. Security rules rely on this list. */
-  careTeam: string[];
+  phone: string | null;
+  date_of_birth: IsoDate | null;
+  primary_practitioner_id: string | null;
   status: PatientStatus;
-  completedSessions: number; // maintained by Cloud Functions
-  lastSessionAt?: TimestampLike;
-  createdAt: TimestampLike;
+  completed_sessions: number;
+  last_session_at: Timestamp | null;
+  created_at: Timestamp;
 }
 
-/** patients/{patientId}/notes/{id}. Clinical notes, never visible to the patient. */
+export interface CareTeamMember {
+  patient_id: string;
+  practitioner_id: string;
+  added_at: Timestamp;
+}
+
+/** Clinical note, never visible to the patient. */
 export interface ClinicalNote {
-  authorId: string;
-  authorName: string;
+  id: string;
+  patient_id: string;
+  author_id: string;
+  author_name: string;
   body: string;
-  appointmentId?: string;
-  createdAt: TimestampLike;
-  updatedAt?: TimestampLike;
+  appointment_id: string | null;
+  created_at: Timestamp;
+  updated_at: Timestamp | null;
 }
 
-/** patients/{patientId}/tasks/{id}. Practitioner to-do items about this patient. */
+/** Practitioner to-do item about a patient. */
 export interface PatientTask {
-  authorId: string;
+  id: string;
+  patient_id: string;
+  author_id: string;
   title: string;
   done: boolean;
-  dueDate?: string; // yyyy-mm-dd
-  createdAt: TimestampLike;
+  due_date: IsoDate | null;
+  created_at: Timestamp;
 }
 
 export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_show";
 export type SessionMode = "video" | "audio" | "chat";
 
-/** appointments/{id}. Created only by the bookAppointment function so double booking can't happen. */
+/** Created only by book_appointment(), so double booking can't happen. */
 export interface Appointment {
-  patientId: string;
-  patientName: string;
-  practitionerId: string;
-  practitionerName: string;
-  start: TimestampLike;
-  end: TimestampLike;
+  id: string;
+  patient_id: string;
+  patient_name: string;
+  practitioner_id: string;
+  practitioner_name: string;
+  start_at: Timestamp;
+  end_at: Timestamp;
   mode: SessionMode;
   status: AppointmentStatus;
-  meetingUrl?: string;
-  cancelReason?: string;
-  createdAt: TimestampLike;
+  meeting_url: string | null;
+  cancel_reason: string | null;
+  created_at: Timestamp;
 }
 
 export type TransferStatus = "pending" | "accepted" | "declined" | "cancelled";
 
-/** transfers/{id}. Handing a patient over to another practitioner. */
+/** Handing a patient over to another practitioner. */
 export interface Transfer {
-  patientId: string;
-  patientName: string;
-  fromPractitionerId: string;
-  fromPractitionerName: string;
-  toPractitionerId: string;
-  toPractitionerName: string;
+  id: string;
+  patient_id: string;
+  patient_name: string;
+  from_practitioner_id: string;
+  from_practitioner_name: string;
+  to_practitioner_id: string;
+  to_practitioner_name: string;
   reason: string;
   /** Keep the sending practitioner on the care team after the handover. */
-  keepAccess: boolean;
+  keep_access: boolean;
   status: TransferStatus;
-  createdAt: TimestampLike;
-  respondedAt?: TimestampLike;
+  created_at: Timestamp;
+  responded_at: Timestamp | null;
 }
 
 export type AvailabilityKind = "unavailable" | "available";
 export type RequestStatus = "pending" | "approved" | "rejected";
 
-/** availabilityRequests/{id}. "I won't see patients this week" or "I'm available these days". */
+/** "I won't see patients this week" or "I'm available these days". */
 export interface AvailabilityRequest {
-  practitionerId: string;
-  practitionerName: string;
+  id: string;
+  practitioner_id: string;
+  practitioner_name: string;
   kind: AvailabilityKind;
-  from: string; // yyyy-mm-dd
-  to: string; // yyyy-mm-dd
+  from_date: IsoDate;
+  to_date: IsoDate;
   /** For kind "available": the hours offered on each day in the range. */
-  hours?: { start: string; end: string };
-  note?: string;
+  hours: TimeWindow | null;
+  note: string | null;
   status: RequestStatus;
-  reviewedBy?: string;
-  reviewedAt?: TimestampLike;
-  createdAt: TimestampLike;
+  reviewed_by: string | null;
+  reviewed_at: Timestamp | null;
+  created_at: Timestamp;
 }
 
 export type TemplateKind = "message" | "assessment";
 
-/** templates/{id}. Saved messages a practitioner can send in one tap. */
+/** Saved messages a practitioner can send in one tap. */
 export interface MessageTemplate {
-  ownerId: string;
-  /** Shared templates are visible to every practitioner. Only admins can create them. */
+  id: string;
+  /** Empty for the clinic's starter templates. */
+  owner_id: string | null;
+  /** Shared templates are visible to every practitioner. Only admins create them. */
   shared: boolean;
   kind: TemplateKind;
   title: string;
   body: string;
   locale: Locale;
   /** For kind "assessment": the form sent along with the message. */
-  formId?: string;
-  createdAt: TimestampLike;
+  form_id: string | null;
+  created_at: Timestamp;
 }
 
 export interface AssessmentOption {
   label: string;
-  labelAr?: string;
+  label_ar?: string;
   value: number;
 }
 
 export interface AssessmentQuestion {
   id: string;
   text: string;
-  textAr?: string;
+  text_ar?: string;
   options: AssessmentOption[];
 }
 
@@ -191,78 +207,77 @@ export interface SeverityBand {
   min: number;
   max: number;
   label: string;
-  labelAr?: string;
+  label_ar?: string;
   level: 0 | 1 | 2 | 3 | 4;
 }
 
-/** assessmentForms/{id}. Standard questionnaires such as PHQ-9 and GAD-7. */
+/** Standard questionnaires such as PHQ-9 and GAD-7. */
 export interface AssessmentForm {
+  id: string; // "phq9"
   code: string; // "PHQ-9"
   title: string;
-  titleAr?: string;
+  title_ar: string | null;
   instructions: string;
-  instructionsAr?: string;
+  instructions_ar: string | null;
   questions: AssessmentQuestion[];
   bands: SeverityBand[];
   /** Question ids that raise a safety flag when answered above 0 (e.g. PHQ-9 item 9). */
-  safetyItems?: string[];
+  safety_items: string[];
   active: boolean;
 }
 
 export type AssignmentStatus = "sent" | "completed";
 
-/** assessmentAssignments/{id}. One form sent to one patient. */
+/** One form sent to one patient. */
 export interface AssessmentAssignment {
-  patientId: string;
-  patientName: string;
-  practitionerId: string;
-  formId: string;
-  formCode: string;
-  formTitle: string;
+  id: string;
+  patient_id: string;
+  patient_name: string;
+  practitioner_id: string;
+  form_id: string;
+  form_code: string;
+  form_title: string;
   status: AssignmentStatus;
-  /** Written by the patient once, when they submit. */
-  answers?: Record<string, number>;
-  sentAt: TimestampLike;
-  completedAt?: TimestampLike;
+  /** Written once, by submit_assessment(). */
+  answers: Record<string, number> | null;
+  sent_at: Timestamp;
+  completed_at: Timestamp | null;
 }
 
-/**
- * assessmentResults/{assignmentId}. Written only by the scoring function and readable only
- * by the care team, so patients never see raw scores or safety flags.
- */
+/** Written only by submit_assessment() and readable only by the care team. */
 export interface AssessmentResult {
-  patientId: string;
-  practitionerId: string;
-  formId: string;
-  formCode: string;
+  assignment_id: string;
+  patient_id: string;
+  practitioner_id: string;
+  form_id: string;
+  form_code: string;
   score: number;
-  maxScore: number;
+  max_score: number;
   severity: string;
-  severityLevel: number;
+  severity_level: number;
   /** A safety item (e.g. PHQ-9 item 9) was answered above 0. Needs same-day follow-up. */
-  safetyFlag: boolean;
+  safety_flag: boolean;
+  incomplete: boolean;
   reviewed: boolean;
-  completedAt: TimestampLike;
+  completed_at: Timestamp;
 }
 
-/** conversations/{patientId}_{practitionerId} */
 export interface Conversation {
-  patientId: string;
-  practitionerId: string;
-  participants: string[];
-  lastMessage?: string;
-  lastMessageAt?: TimestampLike;
+  id: string;
+  patient_id: string;
+  practitioner_id: string;
+  last_message: string | null;
+  last_message_at: Timestamp | null;
+  last_sender_id: string | null;
 }
 
-/** conversations/{id}/messages/{id} */
 export interface ChatMessage {
-  senderId: string;
+  id: string;
+  conversation_id: string;
+  sender_id: string;
   text: string;
-  templateId?: string;
-  assessmentAssignmentId?: string;
-  createdAt: TimestampLike;
-  readAt?: TimestampLike;
+  template_id: string | null;
+  assessment_assignment_id: string | null;
+  created_at: Timestamp;
+  read_at: Timestamp | null;
 }
-
-export const conversationId = (patientId: string, practitionerId: string) =>
-  `${patientId}_${practitionerId}`;

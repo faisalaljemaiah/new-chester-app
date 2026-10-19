@@ -1,14 +1,13 @@
 "use client";
 
 import type { AvailabilityKind, Practitioner, WeeklyHours } from "@chester/shared";
-import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 
 import { Card, Empty, StatusBadge } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
-import { api, db } from "@/lib/firebase";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { useMyAvailabilityRequests, usePendingAvailabilityRequests } from "@/lib/queries";
+import { must, rpc, supabase } from "@/lib/supabase";
 
 const DAY_KEYS: MessageKey[] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 const iso = (d: Date) => d.toISOString().slice(0, 10);
@@ -40,7 +39,7 @@ export default function AvailabilityPage() {
 }
 
 function NewRequest() {
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { t } = useI18n();
   const [kind, setKind] = useState<AvailabilityKind>("unavailable");
   const [range, setRange] = useState(weekRange(0));
@@ -50,17 +49,16 @@ function NewRequest() {
 
   async function submit() {
     if (!user) return;
-    await addDoc(collection(db, "availabilityRequests"), {
-      practitionerId: user.uid,
-      practitionerName: profile?.displayName ?? user.email,
-      kind,
-      from: range.from,
-      to: range.to,
-      ...(kind === "available" ? { hours } : {}),
-      ...(note.trim() ? { note: note.trim() } : {}),
-      status: "pending",
-      createdAt: serverTimestamp(),
-    });
+    // practitioner_id, its name and the status are filled in by the database.
+    await must(
+      supabase.from("availability_requests").insert({
+        kind,
+        from_date: range.from,
+        to_date: range.to,
+        hours: kind === "available" ? hours : null,
+        note: note.trim() || null,
+      }),
+    );
     setNote("");
     setSent(true);
     setTimeout(() => setSent(false), 3000);
@@ -121,7 +119,7 @@ function NewRequest() {
 function MyRequests() {
   const { user } = useAuth();
   const { t } = useI18n();
-  const { data } = useMyAvailabilityRequests(user?.uid);
+  const { data } = useMyAvailabilityRequests(user?.id);
   return (
     <Card title={t("myRequests")}>
       {data.length === 0 && <Empty />}
@@ -130,13 +128,15 @@ function MyRequests() {
           <div className="spacer">
             <strong>{r.kind === "unavailable" ? t("notAvailable") : t("availableExtra")}</strong>
             <div className="small muted" dir="ltr" style={{ textAlign: "start" }}>
-              {r.from} → {r.to}
+              {r.from_date} → {r.to_date}
               {r.hours ? ` · ${r.hours.start}–${r.hours.end}` : ""}
             </div>
           </div>
           <StatusBadge status={r.status} />
           {r.status === "pending" && (
-            <button className="btn ghost small" onClick={() => deleteDoc(doc(db, "availabilityRequests", r.id))}>
+            <button className="btn ghost small" onClick={() =>
+                must(supabase.from("availability_requests").delete().eq("id", r.id)).catch(console.error)
+              }>
               {t("withdraw")}
             </button>
           )}
@@ -152,8 +152,12 @@ function ReviewQueue() {
   const [warning, setWarning] = useState<string | null>(null);
 
   async function review(requestId: string, approve: boolean) {
-    const { data: res } = await api.reviewAvailabilityRequest({ requestId, approve });
-    setWarning(res.affectedAppointments > 0 ? `${res.affectedAppointments} ${t("affectedSessions")}` : null);
+    try {
+      const affected = await rpc<number>("review_availability_request", { p_request: requestId, p_approve: approve });
+      setWarning(affected > 0 ? `${affected} ${t("affectedSessions")}` : null);
+    } catch (e) {
+      setWarning((e as Error).message || t("error"));
+    }
   }
 
   return (
@@ -163,9 +167,9 @@ function ReviewQueue() {
       {data.map((r) => (
         <div key={r.id} className="list-item">
           <div className="spacer">
-            <strong>{r.practitionerName}</strong> · {r.kind === "unavailable" ? t("notAvailable") : t("availableExtra")}
+            <strong>{r.practitioner_name}</strong> · {r.kind === "unavailable" ? t("notAvailable") : t("availableExtra")}
             <div className="small muted" dir="ltr" style={{ textAlign: "start" }}>
-              {r.from} → {r.to}
+              {r.from_date} → {r.to_date}
               {r.hours ? ` · ${r.hours.start}–${r.hours.end}` : ""}
             </div>
             {r.note && <div className="small">{r.note}</div>}
@@ -192,20 +196,20 @@ function WeeklyHoursEditor() {
 
   useEffect(() => {
     if (!profile) return;
-    setHours(profile.weeklyHours ?? {});
-    setSessionMinutes(profile.sessionMinutes ?? 50);
-    setTimeZone(profile.timeZone ?? "Asia/Riyadh");
+    setHours(profile.weekly_hours ?? {});
+    setSessionMinutes(profile.session_minutes ?? 50);
+    setTimeZone(profile.time_zone ?? "Asia/Riyadh");
   }, [profile]);
 
   if (!profile || !user) return null;
 
   const setDay = (day: number, value: { start: string; end: string } | null) =>
-    setHours((h) => ({ ...h, [day]: value ? [value] : [] }));
+    setHours((h) => ({ ...h, [String(day)]: value ? [value] : [] }));
 
   async function save() {
     if (!user) return;
-    const update: Partial<Practitioner> = { weeklyHours: hours, sessionMinutes, timeZone };
-    await updateDoc(doc(db, "practitioners", user.uid), update);
+    const update: Partial<Practitioner> = { weekly_hours: hours, session_minutes: sessionMinutes, time_zone: timeZone };
+    await must(supabase.from("practitioners").update(update).eq("id", user.id));
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }
@@ -215,7 +219,7 @@ function WeeklyHoursEditor() {
       <div className="stack">
         <p className="small muted">{t("weeklyHoursHelp")}</p>
         {DAY_KEYS.map((key, day) => {
-          const window = hours[day as keyof WeeklyHours]?.[0];
+          const window = hours[String(day)]?.[0];
           return (
             <div key={key} className="row">
               <label className="checkbox" style={{ width: 120 }}>

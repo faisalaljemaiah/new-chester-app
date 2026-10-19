@@ -1,21 +1,20 @@
 "use client";
 
 import type { Locale, MessageTemplate, TemplateKind } from "@chester/shared";
-import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc } from "firebase/firestore";
 import { useState } from "react";
 
 import { Card, Empty, Modal } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
-import { db } from "@/lib/firebase";
-import type { WithId } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { useForms, useTemplates } from "@/lib/queries";
+import { must, supabase } from "@/lib/supabase";
 
 export default function TemplatesPage() {
   const { user, isAdmin } = useAuth();
   const { t } = useI18n();
-  const { data: templates } = useTemplates(user?.uid);
-  const [editing, setEditing] = useState<WithId<MessageTemplate> | "new" | null>(null);
+  // Templates aren't broadcast by Realtime, so reload the list after each change.
+  const { data: templates, refresh } = useTemplates(user?.id);
+  const [editing, setEditing] = useState<MessageTemplate | "new" | null>(null);
 
   return (
     <>
@@ -28,7 +27,7 @@ export default function TemplatesPage() {
       <div className="grid grid-2">
         {templates.length === 0 && <Empty />}
         {templates.map((tpl) => {
-          const canEdit = isAdmin || tpl.ownerId === user?.uid;
+          const canEdit = isAdmin || tpl.owner_id === user?.id;
           return (
             <Card
               key={tpl.id}
@@ -52,7 +51,11 @@ export default function TemplatesPage() {
                   <button className="btn secondary small" onClick={() => setEditing(tpl)}>
                     {t("edit")}
                   </button>
-                  <button className="btn ghost small" onClick={() => deleteDoc(doc(db, "templates", tpl.id))}>
+                  <button className="btn ghost small" onClick={() =>
+                      must(supabase.from("templates").delete().eq("id", tpl.id))
+                        .then(refresh)
+                        .catch(console.error)
+                    }>
                     {t("delete")}
                   </button>
                 </div>
@@ -61,19 +64,33 @@ export default function TemplatesPage() {
           );
         })}
       </div>
-      {editing && <TemplateEditor template={editing === "new" ? null : editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <TemplateEditor
+          template={editing === "new" ? null : editing}
+          onClose={() => setEditing(null)}
+          onSaved={refresh}
+        />
+      )}
     </>
   );
 }
 
-function TemplateEditor({ template, onClose }: { template: WithId<MessageTemplate> | null; onClose: () => void }) {
+function TemplateEditor({
+  template,
+  onClose,
+  onSaved,
+}: {
+  template: MessageTemplate | null;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
   const { user, isAdmin } = useAuth();
   const { t } = useI18n();
   const { data: forms } = useForms();
   const [title, setTitle] = useState(template?.title ?? "");
   const [body, setBody] = useState(template?.body ?? "");
   const [kind, setKind] = useState<TemplateKind>(template?.kind ?? "message");
-  const [formId, setFormId] = useState(template?.formId ?? "");
+  const [formId, setFormId] = useState(template?.form_id ?? "");
   const [locale, setLocale] = useState<Locale>(template?.locale ?? "en");
   const [shared, setShared] = useState(template?.shared ?? false);
 
@@ -85,10 +102,12 @@ function TemplateEditor({ template, onClose }: { template: WithId<MessageTemplat
       kind,
       locale,
       shared: isAdmin && shared,
-      ...(kind === "assessment" ? { formId } : {}),
+      form_id: kind === "assessment" ? formId : null,
     };
-    if (template) await updateDoc(doc(db, "templates", template.id), data);
-    else await addDoc(collection(db, "templates"), { ...data, ownerId: user.uid, createdAt: serverTimestamp() });
+    // owner_id defaults to the signed-in practitioner.
+    if (template) await must(supabase.from("templates").update(data).eq("id", template.id));
+    else await must(supabase.from("templates").insert(data));
+    await onSaved();
     onClose();
   }
 

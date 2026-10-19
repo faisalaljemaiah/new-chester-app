@@ -139,7 +139,7 @@ export function SectionHeader({ title, action, onAction }: { title: string; acti
   );
 }
 
-export function Avatar({ name, uri, size = 44 }: { name: string; uri?: string; size?: number }) {
+export function Avatar({ name, uri, size = 44 }: { name: string; uri?: string | null; size?: number }) {
   const initials = name
     .split(/\s+/)
     .filter(Boolean)

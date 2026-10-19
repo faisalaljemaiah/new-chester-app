@@ -1,19 +1,26 @@
 import { colors, radius, spacing, type AssessmentAssignment, type AssessmentForm } from '@chester/shared';
 import { router, useLocalSearchParams } from 'expo-router';
-import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useState } from 'react';
 import { Alert, Linking, Pressable, StyleSheet, View } from 'react-native';
 
 import { Button, Card, Empty, Loading, Screen, Text } from '@/components/ui';
-import { db } from '@/lib/firebase';
-import { useDocument } from '@/lib/hooks';
+import { useLive } from '@/lib/hooks';
+import { rpc, supabase } from '@/lib/supabase';
 
 const EMERGENCY_NUMBER = process.env.EXPO_PUBLIC_EMERGENCY_NUMBER ?? '911';
 
 export default function AssessmentScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { data: assignment, loading } = useDocument<AssessmentAssignment>(`assessmentAssignments/${id}`);
-  const { data: form } = useDocument<AssessmentForm>(assignment ? `assessmentForms/${assignment.formId}` : null);
+  const { data: assignment, loading, refresh } = useLive<AssessmentAssignment>(
+    `assignment:${id}`,
+    () => supabase.from('assessment_assignments').select('*').eq('id', id).maybeSingle(),
+    ['assessment_assignments'],
+  );
+  const { data: form } = useLive<AssessmentForm>(
+    assignment ? `form:${assignment.form_id}` : null,
+    () => supabase.from('assessment_forms').select('*').eq('id', assignment!.form_id).maybeSingle(),
+    [],
+  );
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
 
@@ -36,12 +43,9 @@ export default function AssessmentScreen() {
   async function submit() {
     setBusy(true);
     try {
-      // Scoring happens in a Cloud Function; the patient only submits answers.
-      await updateDoc(doc(db, 'assessmentAssignments', id), {
-        answers,
-        status: 'completed',
-        completedAt: serverTimestamp(),
-      });
+      // The database scores the answers; the patient never sees the score.
+      await rpc('submit_assessment', { p_assignment: id, p_answers: answers });
+      await refresh();
     } catch (e) {
       Alert.alert('Could not submit', (e as Error).message);
     } finally {
@@ -78,7 +82,7 @@ export default function AssessmentScreen() {
         </Card>
       ))}
 
-      {form.safetyItems?.some((sid) => (answers[sid] ?? 0) > 0) && (
+      {form.safety_items.some((sid) => (answers[sid] ?? 0) > 0) && (
         <Card style={{ backgroundColor: colors.dangerSoft, borderColor: colors.danger }}>
           <Text variant="heading" style={{ color: colors.danger }}>
             You don't have to wait for your next session

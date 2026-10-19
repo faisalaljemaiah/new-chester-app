@@ -1,23 +1,46 @@
 import { colors, radius, spacing, type ChatMessage, type Conversation, type Practitioner } from '@chester/shared';
 import { router, useLocalSearchParams } from 'expo-router';
-import { addDoc, collection, orderBy, query, serverTimestamp } from 'firebase/firestore';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { FlatList, KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Avatar, Icon, Text } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { db } from '@/lib/firebase';
 import { formatTime } from '@/lib/format';
-import { useDocument, useQuery } from '@/lib/hooks';
+import { useLive, useRows } from '@/lib/hooks';
+import { must, supabase } from '@/lib/supabase';
 
 export default function Chat() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
-  const { data: convo } = useDocument<Conversation>(`conversations/${id}`);
-  const { data: practitioner } = useDocument<Practitioner>(convo ? `practitioners/${convo.practitionerId}` : null);
-  const q = useMemo(() => query(collection(db, 'conversations', id, 'messages'), orderBy('createdAt', 'desc')), [id]);
-  const { data: messages } = useQuery<ChatMessage>(q);
+  const { data: convo } = useLive<Conversation>(
+    `conversation:${id}`,
+    () => supabase.from('conversations').select('*').eq('id', id).maybeSingle(),
+    [],
+  );
+  const { data: practitioner } = useLive<Practitioner>(
+    convo ? `practitioner:${convo.practitioner_id}` : null,
+    () => supabase.from('practitioners').select('*').eq('id', convo!.practitioner_id).maybeSingle(),
+    [],
+  );
+  // Newest first, because the list is inverted.
+  const { data: messages } = useRows<ChatMessage>(
+    `messages:${id}`,
+    () => supabase.from('messages').select('*').eq('conversation_id', id).order('created_at', { ascending: false }),
+    ['messages'],
+  );
+
+  // Mark the practitioner's messages as read while the chat is open.
+  const unread = messages.some((m) => !m.read_at && m.sender_id !== user?.id);
+  useEffect(() => {
+    if (!unread || !user) return;
+    void supabase
+      .from('messages')
+      .update({ read_at: new Date().toISOString() })
+      .eq('conversation_id', id)
+      .neq('sender_id', user.id)
+      .is('read_at', null);
+  }, [unread, id, user]);
   const [text, setText] = useState('');
   const sending = useRef(false);
 
@@ -27,17 +50,15 @@ export default function Chat() {
     sending.current = true;
     setText('');
     try {
-      await addDoc(collection(db, 'conversations', id, 'messages'), {
-        senderId: user.uid,
-        text: body,
-        createdAt: serverTimestamp(),
-      });
+      await must(supabase.from('messages').insert({ conversation_id: id, text: body }));
+    } catch {
+      setText(body);
     } finally {
       sending.current = false;
     }
   }
 
-  const name = practitioner?.displayName ?? 'Your practitioner';
+  const name = practitioner?.display_name ?? 'Your practitioner';
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }} edges={['top', 'bottom']}>
@@ -45,7 +66,7 @@ export default function Chat() {
         <Pressable onPress={() => router.back()} hitSlop={12}>
           <Icon ios="chevron.left" material="arrow_back" />
         </Pressable>
-        <Avatar name={name} uri={practitioner?.photoUrl} size={36} />
+        <Avatar name={name} uri={practitioner?.photo_url} size={36} />
         <Text variant="heading">{name}</Text>
       </View>
 
@@ -56,21 +77,21 @@ export default function Chat() {
           keyExtractor={(m) => m.id}
           contentContainerStyle={{ padding: spacing.lg, gap: spacing.sm }}
           renderItem={({ item }) => {
-            const mine = item.senderId === user?.uid;
+            const mine = item.sender_id === user?.id;
             return (
               <View style={[styles.bubble, mine ? styles.mine : styles.theirs]}>
                 <Text style={{ color: mine ? colors.onPrimary : colors.text }}>{item.text}</Text>
-                {item.assessmentAssignmentId ? (
+                {item.assessment_assignment_id ? (
                   <Pressable
                     style={styles.formButton}
-                    onPress={() => router.push(`/assessment/${item.assessmentAssignmentId}`)}>
+                    onPress={() => router.push(`/assessment/${item.assessment_assignment_id}`)}>
                     <Icon ios="list.clipboard" material="assignment" color={colors.onPrimary} size={16} />
                     <Text style={{ color: colors.onPrimary, fontWeight: '600' }}>Open check-in</Text>
                   </Pressable>
                 ) : null}
-                {item.createdAt ? (
+                {item.created_at ? (
                   <Text variant="small" style={{ color: mine ? colors.primarySoft : colors.textFaint, alignSelf: 'flex-end' }}>
-                    {formatTime(item.createdAt)}
+                    {formatTime(item.created_at)}
                   </Text>
                 ) : null}
               </View>

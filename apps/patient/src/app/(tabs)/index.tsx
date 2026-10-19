@@ -5,9 +5,8 @@ import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native
 
 import { Avatar, Card, Chip, Empty, Icon, Screen, SectionHeader, Text } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
-import { useDocument } from '@/lib/hooks';
 import { firstName, formatDate, formatTime, greeting } from '@/lib/format';
-import { useMyAppointments, usePractitioners } from '@/lib/queries';
+import { useBookedTimes, useMyAppointments, usePractitioners } from '@/lib/queries';
 
 const services = [
   { key: 'psychiatry', label: 'Psychiatry', ios: 'cross.case', material: 'medication' },
@@ -21,30 +20,30 @@ export default function Home() {
   const [search, setSearch] = useState('');
   const [discipline, setDiscipline] = useState<Practitioner['discipline'] | null>(null);
   const { data: practitioners } = usePractitioners();
-  const { data: appointments } = useMyAppointments(user?.uid);
+  const { data: appointments } = useMyAppointments(user?.id);
 
   const upcoming = useMemo(
     () =>
       appointments
-        .filter((a) => a.status === 'scheduled' && a.end.toMillis() > Date.now())
-        .sort((a, b) => a.start.toMillis() - b.start.toMillis())[0],
+        .filter((a) => a.status === 'scheduled' && Date.parse(a.end_at) > Date.now())
+        .sort((a, b) => Date.parse(a.start_at) - Date.parse(b.start_at))[0],
     [appointments],
   );
 
   const shown = practitioners.filter(
     (p) =>
       (!discipline || p.discipline === discipline) &&
-      (!search || `${p.displayName} ${p.title}`.toLowerCase().includes(search.toLowerCase())),
+      (!search || `${p.display_name} ${p.title}`.toLowerCase().includes(search.toLowerCase())),
   );
 
   // "Available today" uses the patient's main practitioner, or the first one listed.
-  const featured = practitioners.find((p) => p.id === patient?.primaryPractitionerId) ?? practitioners[0];
-  const today = featured ? isoDateIn(new Date(), featured.timeZone) : null;
-  const { data: booked } = useDocument<{ times: string[] }>(featured && today ? `bookedSlots/${featured.id}_${today}` : null);
+  const featured = practitioners.find((p) => p.id === patient?.primary_practitioner_id) ?? practitioners[0];
+  const today = featured ? isoDateIn(new Date(), featured.time_zone) : '';
+  const { data: booked } = useBookedTimes(featured?.id, today);
   const todaySlots = useMemo(() => {
     if (!featured || !today) return [];
-    const now = timeIn(new Date(), featured.timeZone);
-    return slotsForDate(featured, today, booked?.times ?? []).filter((s) => s.time > now).slice(0, 8);
+    const now = timeIn(new Date(), featured.time_zone);
+    return slotsForDate(featured, today, booked).filter((s) => s.time > now).slice(0, 8);
   }, [featured, today, booked]);
 
   return (
@@ -52,10 +51,10 @@ export default function Home() {
       <View style={styles.header}>
         <View>
           <Text variant="muted">{greeting()},</Text>
-          <Text variant="title">{firstName(patient?.displayName ?? user?.displayName) || 'there'} 👋</Text>
+          <Text variant="title">{firstName(patient?.display_name) || 'there'} 👋</Text>
         </View>
         <Pressable onPress={() => router.push('/(tabs)/profile')}>
-          <Avatar name={patient?.displayName ?? user?.displayName ?? '?'} />
+          <Avatar name={patient?.display_name ?? '?'} />
         </Pressable>
       </View>
 
@@ -95,11 +94,11 @@ export default function Home() {
       <SectionHeader title="Upcoming Appointment" />
       {upcoming ? (
         <Card onPress={() => router.push(`/session/${upcoming.id}`)} style={styles.row}>
-          <Avatar name={upcoming.practitionerName} size={48} />
+          <Avatar name={upcoming.practitioner_name} size={48} />
           <View style={{ flex: 1 }}>
-            <Text variant="heading">{upcoming.practitionerName}</Text>
+            <Text variant="heading">{upcoming.practitioner_name}</Text>
             <Text variant="small">
-              {formatDate(upcoming.start)} · {formatTime(upcoming.start)}
+              {formatDate(upcoming.start_at)} · {formatTime(upcoming.start_at)}
             </Text>
           </View>
           <Icon ios="chevron.right" material="chevron_right" color={colors.textMuted} size={18} />
@@ -110,7 +109,7 @@ export default function Home() {
 
       {featured && todaySlots.length > 0 && (
         <>
-          <SectionHeader title="Available Today" action={featured.displayName} />
+          <SectionHeader title="Available Today" action={featured.display_name} />
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
             {todaySlots.map((s) => (
               <Chip
@@ -127,9 +126,9 @@ export default function Home() {
       {shown.length === 0 ? <Empty text="No specialists match your search." /> : null}
       {shown.map((p) => (
         <Card key={p.id} onPress={() => router.push(`/practitioner/${p.id}`)} style={styles.row}>
-          <Avatar name={p.displayName} uri={p.photoUrl} size={52} />
+          <Avatar name={p.display_name} uri={p.photo_url} size={52} />
           <View style={{ flex: 1, gap: 2 }}>
-            <Text variant="heading">{p.displayName}</Text>
+            <Text variant="heading">{p.display_name}</Text>
             <Text variant="small">{p.title}</Text>
           </View>
           <View style={styles.tag}>

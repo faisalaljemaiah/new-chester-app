@@ -1,16 +1,10 @@
 import { colors, radius, spacing } from '@chester/shared';
 import { router } from 'expo-router';
-import {
-  createUserWithEmailAndPassword,
-  sendPasswordResetEmail,
-  signInWithEmailAndPassword,
-  updateProfile,
-} from 'firebase/auth';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
 
 import { Button, Screen, Text } from '@/components/ui';
-import { api, auth } from '@/lib/firebase';
+import { supabase } from '@/lib/supabase';
 
 export default function SignIn() {
   const [mode, setMode] = useState<'sign-in' | 'sign-up'>('sign-in');
@@ -26,13 +20,22 @@ export default function SignIn() {
     setMessage(null);
     try {
       if (mode === 'sign-up') {
-        const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        await updateProfile(cred.user, { displayName: name.trim() });
-        // Creates the patient file and sets the "patient" role on the account.
-        await api.registerPatient({ displayName: name.trim(), phone: phone.trim() || undefined });
-        await cred.user.getIdToken(true);
+        // The database creates the patient file from these details when the account is created.
+        const { data, error } = await supabase.auth.signUp({
+          email: email.trim(),
+          password,
+          options: { data: { display_name: name.trim(), phone: phone.trim() || undefined } },
+        });
+        if (error) throw error;
+        if (!data.session) {
+          // Email confirmation is on: the account works once they click the link.
+          setMode('sign-in');
+          setMessage('Check your email and tap the link to confirm your account, then sign in.');
+          return;
+        }
       } else {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
+        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        if (error) throw error;
       }
       router.replace('/(tabs)');
     } catch (e) {
@@ -44,7 +47,7 @@ export default function SignIn() {
 
   async function resetPassword() {
     if (!email.trim()) return setMessage('Enter your email first.');
-    await sendPasswordResetEmail(auth, email.trim()).catch(() => {});
+    await supabase.auth.resetPasswordForEmail(email.trim()).catch(() => {});
     setMessage('If that email has an account, a reset link is on its way.');
   }
 
@@ -117,10 +120,12 @@ function Field(props: React.ComponentProps<typeof TextInput>) {
 
 function friendlyError(e: unknown) {
   const code = (e as { code?: string }).code ?? '';
-  if (code.includes('invalid-credential') || code.includes('wrong-password')) return 'Email or password is incorrect.';
-  if (code.includes('email-already-in-use')) return 'That email already has an account. Try signing in.';
-  if (code.includes('weak-password')) return 'Use a password with at least 8 characters.';
-  if (code.includes('invalid-email')) return 'That email address does not look right.';
+  if (code === 'invalid_credentials') return 'Email or password is incorrect.';
+  if (code === 'email_not_confirmed') return 'Please confirm your email first. Check your inbox for the link.';
+  if (code === 'user_already_exists' || code === 'email_exists') return 'That email already has an account. Try signing in.';
+  if (code === 'weak_password') return 'Use a password with at least 8 characters.';
+  if (code === 'email_address_invalid' || code === 'validation_failed') return 'That email address does not look right.';
+  if (code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit') return 'Too many attempts. Please wait a few minutes.';
   return 'Something went wrong. Please try again.';
 }
 

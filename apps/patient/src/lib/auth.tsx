@@ -1,14 +1,14 @@
-import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
+import type { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 import type { Patient } from '@chester/shared';
 
-import { auth, db } from './firebase';
+import { useLive } from './hooks';
+import { supabase } from './supabase';
 
 interface AuthState {
   user: User | null;
-  patient: (Patient & { id: string }) | null;
+  patient: Patient | null;
   /** True until the first auth state (and patient file, if signed in) has loaded. */
   loading: boolean;
   signOut: () => Promise<void>;
@@ -22,34 +22,36 @@ const AuthContext = createContext<AuthState>({
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [patient, setPatient] = useState<AuthState['patient']>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => onAuthStateChanged(auth, (u) => {
-    setUser(u);
-    if (!u) {
-      setPatient(null);
-      setLoading(false);
-    }
-  }), []);
+  const [session, setSession] = useState<Session | null>(null);
+  const [sessionLoaded, setSessionLoaded] = useState(false);
 
   useEffect(() => {
-    if (!user) return;
-    // The patient file is created by the registerPatient function right after sign-up,
-    // so it may not exist for the first moment.
-    return onSnapshot(
-      doc(db, 'patients', user.uid),
-      (snap) => {
-        setPatient(snap.exists() ? { id: snap.id, ...(snap.data() as Patient) } : null);
-        setLoading(false);
-      },
-      () => setLoading(false),
-    );
-  }, [user]);
+    void supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session);
+      setSessionLoaded(true);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  const uid = session?.user.id ?? null;
+  // The database creates the patient file when the account is created.
+  const patient = useLive<Patient>(
+    uid,
+    () => supabase.from('patients').select('*').eq('id', uid!).maybeSingle(),
+    ['patients'],
+  );
 
   return (
-    <AuthContext.Provider value={{ user, patient, loading, signOut: () => signOut(auth) }}>
+    <AuthContext.Provider
+      value={{
+        user: session?.user ?? null,
+        patient: patient.data,
+        loading: !sessionLoaded || patient.loading,
+        signOut: async () => {
+          await supabase.auth.signOut();
+        },
+      }}>
       {children}
     </AuthContext.Provider>
   );

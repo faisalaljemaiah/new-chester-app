@@ -1,63 +1,68 @@
 # New Chester Clinic: plan
 
-An online psychiatry and psychology clinic with two apps on one Firebase backend:
+An online psychiatry and psychology clinic with two apps on one Supabase backend:
 
 - **Patient app** (iOS, Android and web) in the dark style of the reference design.
 - **Practitioner dashboard** (web) in English and Arabic, with full right-to-left layout.
 
-Screenshots of the current build running on demo data are in [`docs/screenshots`](screenshots).
+Screenshots of the app running on demo data are in [`docs/screenshots`](screenshots).
 
 ## Stack
 
 | Part | Choice | Why |
 |---|---|---|
 | Patient app | Expo SDK 58, React Native, Expo Router | One codebase for iOS, Android and web. Builds and store submission through EAS. |
-| Dashboard | Next.js 16, exported as static files | Runs fully in the browser. Hosted on Firebase Hosting. |
-| Backend | Firebase Auth, Firestore, Cloud Functions (Node 22), Storage | As requested, instead of Supabase. |
-| Shared code | `packages/shared` | Data types, colours, slot calculation and questionnaire scoring used by all three. |
-| Region | `me-central2` (Dammam) | Keeps patient data in Saudi Arabia. Change it in one place if the clinic is elsewhere. |
+| Dashboard | Next.js 16, exported as static files | Runs fully in the browser, so any static host works (Vercel, Netlify, GitHub Pages). |
+| Backend | Supabase: Postgres, Auth, Realtime | Free plan to start. Every rule lives in the database, so a modified app can't skip it. |
+| Shared code | `packages/shared` | Row types, colours, slot calculation and questionnaire scoring used by both apps. |
+| Region | West EU (Ireland, `eu-west-1`) | Keeps patient data in the EU. A Supabase project's region can't be changed later. |
+
+The free plan has no automatic backups and pauses a project after a week with no activity. Before real patients use it, move to the Pro plan ($25 a month), which adds daily backups and stays on.
 
 ## Who can do what
 
-Roles live in a Firebase Auth custom claim that only Cloud Functions can set. The security rules trust that claim.
+Roles live in the `profiles` table. Only database functions can change them, and every access rule reads them.
 
 | Role | How they get it | Can |
 |---|---|---|
 | Patient | Signs up in the app | Book, cancel, message their practitioners, fill in check-ins |
-| Practitioner | An admin adds them in the dashboard's Team page | See only the patients on their care team |
-| Admin (clinic owner) | One-time `make-admin` script | Everything practitioners can, plus approve availability requests and add staff |
+| Practitioner | An admin adds them on the dashboard's Team page | See only the patients on their care team |
+| Admin (clinic owner) | Set once in the SQL editor (see setup step 5) | Everything practitioners can, plus approve availability requests and add staff |
 
-## Data model (Firestore)
+## Data model
 
-| Collection | What it holds | Who reads it |
+All tables have row level security on. Column grants also limit which fields each person can change: a patient can edit their phone number but never their care team or session count.
+
+| Table | What it holds | Who reads it |
 |---|---|---|
-| `users/{uid}` | Name, email, role, language | The user and admins |
-| `practitioners/{uid}` | Public profile, weekly hours, blocked days | Any signed-in user |
-| `patients/{uid}` | Patient file: status, care team, session count | The patient and their care team |
-| `patients/{id}/notes` | Clinical notes | **Care team only, never the patient** |
-| `patients/{id}/tasks` | To-do list for this patient | Care team only |
-| `appointments/{id}` | Session time, type, status, meeting link | The patient, the practitioner, the care team |
-| `bookedSlots/{practitioner}_{date}` | Taken start times, with no patient details | Any signed-in user (so the app can hide them) |
-| `transfers/{id}` | A request to hand a patient to a colleague | The two practitioners |
-| `availabilityRequests/{id}` | "I won't see patients" or "I'm available" requests | The practitioner and admins |
-| `templates/{id}` | Saved messages and assessment links | Practitioners |
-| `assessmentForms/{id}` | Questionnaires (PHQ-9 and GAD-7 included) | Anyone signed in |
-| `assessmentAssignments/{id}` | A form sent to a patient, and their answers | The patient and the care team |
-| `assessmentResults/{id}` | Score, severity and safety flag | **Care team only** |
-| `conversations/{patient}_{practitioner}/messages` | Chat, including templates and form links | The two people in it |
+| `profiles` | Name, email, role, language | The user and admins |
+| `practitioners` | Public profile, weekly hours, blocked days | Anyone signed in |
+| `patients` | Patient file: status, session count, main practitioner | The patient and their care team |
+| `care_team` | Which practitioners may open which patient file | The people in it |
+| `notes` | Clinical notes | **Care team only, never the patient** |
+| `tasks` | To-do list for a patient | Care team only |
+| `appointments` | Session time, type, status, meeting link | The patient, the practitioner, the care team |
+| `transfers` | A request to hand a patient to a colleague | The two practitioners |
+| `availability_requests` | "I won't see patients" or "I'm available" requests | The practitioner and admins |
+| `templates` | Saved messages and assessment links | Practitioners |
+| `assessment_forms` | Questionnaires (PHQ-9 and GAD-7 included) | Anyone signed in |
+| `assessment_assignments` | A form sent to a patient, and their answers | The patient and the care team |
+| `assessment_results` | Score, severity and safety flag | **Care team only** |
+| `conversations`, `messages` | Chat, including templates and form links | The two people in it |
 
-Anything that has to be checked across documents runs in a Cloud Function, so a modified app can't skip the check:
+Anything that has to be checked across tables is a database function the apps call:
 
 | Function | Does |
 |---|---|
-| `registerPatient` | Creates the patient file and sets the patient role after sign-up |
-| `bookAppointment` | Checks the slot is free inside a transaction, books it, adds the practitioner to the care team and opens the chat |
-| `cancelAppointment` | Cancels a future session and frees the slot |
-| `respondToTransfer` | Accepting moves the patient to the new practitioner and, unless "keep my access" was ticked, removes the old one |
-| `reviewAvailabilityRequest` | Admin approval updates the practitioner's schedule and reports how many booked sessions clash |
-| `onAssessmentSubmitted` | Scores the answers and flags PHQ-9 item 9 (self-harm) |
-| `onAppointmentUpdated` | Keeps the session count right when a session is marked completed |
-| `createPractitioner` | Admin adds a practitioner and gets a link for them to set their password |
+| Sign-up trigger | Creates the profile and patient file when someone signs up |
+| `book_appointment` | Checks the time is offered and free, books it, adds the practitioner to the care team and opens the chat. A unique index makes double booking impossible. |
+| `booked_times` | Lists taken times for a day, with no patient details, so the app can hide them |
+| `cancel_appointment` | Cancels a future session |
+| `respond_to_transfer` | Accepting moves the patient to the new practitioner and, unless "keep my access" was ticked, removes the old one |
+| `review_availability_request` | Admin approval updates the practitioner's schedule and reports how many booked sessions clash |
+| `submit_assessment` | Scores the answers and flags PHQ-9 item 9 (self-harm). Each form can be submitted once. |
+| Session trigger | Keeps the session count right when a session is marked completed |
+| `promote_to_practitioner` | Admin turns an existing account into a practitioner or admin |
 
 ## Patient app screens
 
@@ -89,27 +94,29 @@ The language switch in the sidebar flips the whole dashboard to Arabic and right
 
 ## What's tested
 
-- 20 security-rule tests on the Firestore emulator (`npm run test:rules`). They cover: notes and scores hidden from patients, other practitioners kept out, no self-promotion to admin, patients can't book directly or change their care team, a form can only be submitted once, and only the care team can transfer a patient.
-- Type checks pass for all four packages. The patient web build and the dashboard static build both succeed.
-- Both apps were run against the emulator with demo data (`npm run demo -w functions`), which is where the screenshots come from.
-- Not yet run end to end: the Cloud Functions, because the emulator in my sandbox couldn't register the Firestore triggers. They type-check and bundle. They need a run on your machine or a test Firebase project.
+- 28 access tests (`npm run test:db`). They run the real migration on PGlite, an in-process Postgres, with a small stand-in for Supabase's auth schema, so no Docker or project is needed. They cover: notes, to-dos and scores hidden from patients and from other practitioners, no self-promotion to admin, booking only through `book_appointment` with no double booking and no times outside working hours, a form submitted once and scored correctly with the safety flag, only the care team can transfer a patient and only the receiver can accept, only admins approve schedule changes, and patients can't send templates or forms.
+- Type checks pass for all packages. The patient web build and the dashboard static build both succeed.
+- Not yet run end to end against a real Supabase project. That is the next step once the project has the tables (setup steps 2 and 3).
 
 ## Decisions for you
 
 1. **Video calls.** Right now the practitioner pastes a Zoom or Meet link into the session. A built-in call (for example Daily, Agora or Twilio) can come next. That choice affects cost and where call data is processed.
-2. **Data location.** I picked Saudi Arabia (`me-central2`). Firestore's location can't be changed after the project is created, so please confirm the region before we create the real project.
+2. **Backups.** The free plan has none. Move to Supabase Pro before real patient data goes in.
 3. **Arabic for the patient app.** The dashboard is fully bilingual. The patient app is English for now, and I can add Arabic next. For PHQ-9 and GAD-7 in Arabic, use the clinic's validated translations rather than new ones.
 4. **Photos and branding.** The welcome screen has room for a clinic photo like the reference's doctor image. Send a logo and photo when you have them.
 5. **Payments and notifications** (session reminders, new message alerts) are not built yet.
 6. **Repository visibility.** `new-chester-app` is public. The code contains no keys or patient data, but you may want it private.
 
-## Setting up the real Firebase project (when you're ready)
+## Setting up the Supabase project
 
-I haven't created any Firebase project or credentials. When you approve:
+The project `new-chester-app` exists in West EU (Ireland). To finish it:
 
-1. Create a Firebase project on the Blaze plan (Cloud Functions need it). Enable Email/Password sign-in. Create Firestore in the chosen region.
-2. Add a web app, then copy its config into `apps/patient/.env.local` and `apps/dashboard/.env.local`, using the `.env.example` files as the template.
-3. Run `cp firebase/.firebaserc.example firebase/.firebaserc`, then put your project ID in it.
-4. Run `npx firebase deploy --config firebase/firebase.json`. This deploys the rules, indexes, functions and the dashboard.
-5. Run `npm run seed -w functions` to load the PHQ-9 and GAD-7 forms and the starter templates.
-6. Add your own account under Authentication > Users in the Firebase console, then run `npm run make-admin -w functions -- you@clinic.com`.
+1. **Keys.** In Project Settings > API Keys, copy the project URL and the **publishable** (anon) key into `apps/patient/.env.local` and `apps/dashboard/.env.local`, using the `.env.example` files as the template. Never put the secret (`service_role`) key in either app.
+2. **Tables and rules.** Open the SQL Editor, paste all of `supabase/migrations/20261019000000_clinic.sql`, and run it. (Or with the Supabase CLI: `npx supabase link --project-ref <ref>` then `npx supabase db push`.)
+3. **Forms and templates.** In the SQL Editor, paste and run `supabase/seed.sql`.
+4. **Sign-in settings.** In Authentication > URL Configuration, set the Site URL to where the dashboard is hosted (or `http://localhost:3000` for now). Email confirmation is on by default; leave it on.
+5. **First admin.** Sign up in the patient app (or Authentication > Users > Add user), then run this in the SQL Editor with your own details:
+   ```sql
+   select promote_to_practitioner('you@clinic.com', 'Dr Your Name', 'Consultant Psychiatrist', 'psychiatry', true);
+   ```
+6. **Practitioners.** Invite each one from Authentication > Users > Invite user, then add them by email on the dashboard's Team page.

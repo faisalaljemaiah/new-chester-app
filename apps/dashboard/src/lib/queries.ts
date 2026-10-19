@@ -10,91 +10,101 @@ import type {
   Practitioner,
   Transfer,
 } from "@chester/shared";
-import { collection, orderBy, query, where } from "firebase/firestore";
-import { useMemo } from "react";
 
-import { db } from "./firebase";
-import { useQuery } from "./hooks";
+import { useRows } from "./hooks";
+import { supabase } from "./supabase";
 
 export function useMyAppointments(uid: string | undefined) {
-  const q = useMemo(
-    () => (uid ? query(collection(db, "appointments"), where("practitionerId", "==", uid), orderBy("start", "asc")) : null),
-    [uid],
+  return useRows<Appointment>(
+    uid ? `appointments:${uid}` : null,
+    () => supabase.from("appointments").select("*").eq("practitioner_id", uid!).order("start_at"),
+    ["appointments"],
   );
-  return useQuery<Appointment>(q);
 }
 
+/** Patients on this practitioner's care team. */
 export function useMyPatients(uid: string | undefined) {
-  const q = useMemo(
-    () => (uid ? query(collection(db, "patients"), where("careTeam", "array-contains", uid)) : null),
-    [uid],
+  return useRows<Patient>(
+    uid ? `patients:${uid}` : null,
+    () =>
+      supabase
+        .from("patients")
+        .select("*, care_team!inner(practitioner_id)")
+        .eq("care_team.practitioner_id", uid!)
+        .order("display_name"),
+    ["patients", "care_team"],
   );
-  return useQuery<Patient>(q);
 }
 
 export function usePractitioners() {
-  const q = useMemo(() => query(collection(db, "practitioners"), where("active", "==", true)), []);
-  return useQuery<Practitioner>(q);
-}
-
-export function useTransfers(uid: string | undefined, direction: "toPractitionerId" | "fromPractitionerId") {
-  const q = useMemo(
-    () => (uid ? query(collection(db, "transfers"), where(direction, "==", uid), orderBy("createdAt", "desc")) : null),
-    [uid, direction],
+  return useRows<Practitioner>(
+    "practitioners",
+    () => supabase.from("practitioners").select("*").eq("active", true).order("display_name"),
+    ["practitioners"],
   );
-  return useQuery<Transfer>(q);
 }
 
+export function useTransfers(uid: string | undefined, direction: "to_practitioner_id" | "from_practitioner_id") {
+  return useRows<Transfer>(
+    uid ? `transfers:${direction}:${uid}` : null,
+    () => supabase.from("transfers").select("*").eq(direction, uid!).order("created_at", { ascending: false }),
+    ["transfers"],
+  );
+}
+
+/** Results for patients on this practitioner's care team (admins see only their own patients here too). */
 export function useMyResults(uid: string | undefined) {
-  const q = useMemo(
+  return useRows<AssessmentResult>(
+    uid ? `results:${uid}` : null,
     () =>
-      uid
-        ? query(collection(db, "assessmentResults"), where("practitionerId", "==", uid), orderBy("completedAt", "desc"))
-        : null,
-    [uid],
+      supabase
+        .from("assessment_results")
+        .select("*, patients!inner(care_team!inner(practitioner_id))")
+        .eq("patients.care_team.practitioner_id", uid!)
+        .order("completed_at", { ascending: false }),
+    ["assessment_results", "care_team"],
   );
-  return useQuery<AssessmentResult>(q);
 }
 
 export function useMyAvailabilityRequests(uid: string | undefined) {
-  const q = useMemo(
+  return useRows<AvailabilityRequest>(
+    uid ? `requests:${uid}` : null,
     () =>
-      uid
-        ? query(collection(db, "availabilityRequests"), where("practitionerId", "==", uid), orderBy("createdAt", "desc"))
-        : null,
-    [uid],
+      supabase
+        .from("availability_requests")
+        .select("*")
+        .eq("practitioner_id", uid!)
+        .order("created_at", { ascending: false }),
+    ["availability_requests"],
   );
-  return useQuery<AvailabilityRequest>(q);
 }
 
 export function usePendingAvailabilityRequests(isAdmin: boolean) {
-  const q = useMemo(
+  return useRows<AvailabilityRequest>(
+    isAdmin ? "requests:pending" : null,
     () =>
-      isAdmin
-        ? query(collection(db, "availabilityRequests"), where("status", "==", "pending"), orderBy("createdAt", "desc"))
-        : null,
-    [isAdmin],
+      supabase
+        .from("availability_requests")
+        .select("*")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
+    ["availability_requests"],
   );
-  return useQuery<AvailabilityRequest>(q);
 }
 
-/** Clinic-wide templates plus the practitioner's own. Two queries because rules check each case. */
+/** Clinic-wide templates plus the practitioner's own (access rules return exactly these). */
 export function useTemplates(uid: string | undefined) {
-  const sharedQ = useMemo(() => query(collection(db, "templates"), where("shared", "==", true)), []);
-  const mineQ = useMemo(
-    () => (uid ? query(collection(db, "templates"), where("ownerId", "==", uid)) : null),
-    [uid],
+  return useRows<MessageTemplate>(
+    uid ? `templates:${uid}` : null,
+    () => supabase.from("templates").select("*").order("created_at"),
+    ["templates"],
   );
-  const shared = useQuery<MessageTemplate>(sharedQ);
-  const mine = useQuery<MessageTemplate>(mineQ);
-  const data = useMemo(() => {
-    const seen = new Set<string>();
-    return [...mine.data, ...shared.data].filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
-  }, [mine.data, shared.data]);
-  return { data, loading: shared.loading || mine.loading };
 }
 
 export function useForms() {
-  const q = useMemo(() => query(collection(db, "assessmentForms"), where("active", "==", true)), []);
-  return useQuery<AssessmentForm>(q);
+  return useRows<AssessmentForm>(
+    "forms",
+    () => supabase.from("assessment_forms").select("*").eq("active", true).order("code"),
+    ["assessment_forms"],
+  );
 }

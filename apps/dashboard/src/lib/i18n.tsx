@@ -18,6 +18,10 @@ const en = {
   resetSent: "If that email has an account, a reset link is on its way.",
   wrongCredentials: "Email or password is incorrect.",
   notStaff: "This account doesn't have access to the practitioner portal.",
+  newPassword: "New password",
+  savePassword: "Save password",
+  passwordSaved: "Password changed. You can sign in with it now, here or in the patient app.",
+  passwordTooShort: "Use at least 8 characters.",
   loading: "Loading…",
   save: "Save",
   saved: "Saved",
@@ -99,6 +103,7 @@ const en = {
   sendAssessment: "Send assessment",
   sendTemplate: "Send template",
   writeMessage: "Write a message…",
+  noConversation: "You can message this patient once they book a session with you or you accept their transfer.",
   scoreOverTime: "Scores over time",
   noScores: "No completed assessments yet.",
   score: "Score",
@@ -169,8 +174,9 @@ const en = {
   psychology: "Psychology",
   jobTitle: "Job title",
   makeAdmin: "Also make them an admin",
-  setPasswordLink: "Send them this link to set their password:",
-  copy: "Copy",
+  inviteFirst:
+    "The person needs an account first. Invite them from the Supabase dashboard (Authentication > Users > Invite user), or ask them to sign up, then add them here with the same email.",
+  practitionerAdded: "Added. They can now sign in to the practitioner portal.",
 
   sev0: "Minimal",
   sev1: "Mild",
@@ -201,6 +207,10 @@ const ar: Record<MessageKey, string> = {
   resetSent: "إذا كان هذا البريد مسجلاً، فسيصلك رابط لإعادة التعيين.",
   wrongCredentials: "البريد الإلكتروني أو كلمة المرور غير صحيحة.",
   notStaff: "هذا الحساب ليس لديه صلاحية الدخول إلى بوابة الأخصائيين.",
+  newPassword: "كلمة المرور الجديدة",
+  savePassword: "حفظ كلمة المرور",
+  passwordSaved: "تم تغيير كلمة المرور. يمكنك تسجيل الدخول بها الآن، هنا أو في تطبيق المرضى.",
+  passwordTooShort: "استخدم 8 أحرف على الأقل.",
   loading: "جارٍ التحميل…",
   save: "حفظ",
   saved: "تم الحفظ",
@@ -282,6 +292,7 @@ const ar: Record<MessageKey, string> = {
   sendAssessment: "إرسال تقييم",
   sendTemplate: "إرسال قالب",
   writeMessage: "اكتب رسالة…",
+  noConversation: "يمكنك مراسلة هذا المريض بعد أن يحجز جلسة معك أو بعد قبولك تحويله إليك.",
   scoreOverTime: "الدرجات مع الوقت",
   noScores: "لا توجد تقييمات مكتملة بعد.",
   score: "الدرجة",
@@ -352,8 +363,9 @@ const ar: Record<MessageKey, string> = {
   psychology: "علم النفس",
   jobTitle: "المسمى الوظيفي",
   makeAdmin: "اجعله مشرفاً أيضاً",
-  setPasswordLink: "أرسل له هذا الرابط لتعيين كلمة المرور:",
-  copy: "نسخ",
+  inviteFirst:
+    "يجب أن يكون لدى الشخص حساب أولاً. ادعه من لوحة تحكم Supabase (Authentication > Users > Invite user)، أو اطلب منه إنشاء حساب، ثم أضفه هنا بالبريد الإلكتروني نفسه.",
+  practitionerAdded: "تمت الإضافة. يمكنه الآن تسجيل الدخول إلى بوابة الأخصائيين.",
 
   sev0: "طفيف",
   sev1: "خفيف",
@@ -377,12 +389,15 @@ interface I18n {
   dir: "ltr" | "rtl";
   t: (key: MessageKey) => string;
   setLocale: (l: Locale) => void;
-  formatDate: (d: Date) => string;
-  formatTime: (d: Date) => string;
-  formatShortDate: (d: Date) => string;
+  /** Accepts a Date or an ISO timestamp string from the database. */
+  formatDate: (d: Date | string) => string;
+  formatTime: (d: Date | string) => string;
+  formatShortDate: (d: Date | string) => string;
   /** Severity band name for a level 0–4, falling back to the stored English label. */
   severityLabel: (level: number, fallback: string) => string;
 }
+
+const asDate = (d: Date | string) => (typeof d === "string" ? new Date(d) : d);
 
 const I18nContext = createContext<I18n | null>(null);
 const STORAGE_KEY = "chester.locale";
@@ -416,9 +431,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     dir: locale === "ar" ? "rtl" : "ltr",
     t: (key) => dictionaries[locale][key],
     setLocale,
-    formatDate: (d) => d.toLocaleDateString(intl, { weekday: "short", day: "numeric", month: "short", year: "numeric" }),
-    formatTime: (d) => d.toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" }),
-    formatShortDate: (d) => d.toLocaleDateString(intl, { day: "numeric", month: "short" }),
+    formatDate: (d) =>
+      asDate(d).toLocaleDateString(intl, { weekday: "short", day: "numeric", month: "short", year: "numeric" }),
+    formatTime: (d) => asDate(d).toLocaleTimeString(intl, { hour: "2-digit", minute: "2-digit" }),
+    formatShortDate: (d) => asDate(d).toLocaleDateString(intl, { day: "numeric", month: "short" }),
     severityLabel: (level, fallback) =>
       level >= 0 && level <= 4 ? dictionaries[locale][`sev${level}` as MessageKey] : fallback,
   };

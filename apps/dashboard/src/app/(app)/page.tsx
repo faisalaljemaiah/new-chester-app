@@ -12,25 +12,25 @@ export default function Overview() {
   const { user, profile } = useAuth();
   const { t, locale, formatTime, formatDate } = useI18n();
   const router = useRouter();
-  const { data: appointments } = useMyAppointments(user?.uid);
-  const { data: transfers } = useTransfers(user?.uid, "toPractitionerId");
-  const { data: results } = useMyResults(user?.uid);
-  const { data: patients } = useMyPatients(user?.uid);
+  const { data: appointments } = useMyAppointments(user?.id);
+  const { data: transfers } = useTransfers(user?.id, "to_practitioner_id");
+  const { data: results } = useMyResults(user?.id);
+  const { data: patients } = useMyPatients(user?.id);
 
   const now = new Date();
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   const endOfDay = startOfDay + 86_400_000;
   const scheduled = appointments.filter((a) => a.status === "scheduled");
-  const today = scheduled.filter((a) => a.start.toMillis() >= startOfDay && a.start.toMillis() < endOfDay);
-  const upcoming = scheduled.filter((a) => a.start.toMillis() >= endOfDay).slice(0, 5);
+  const today = scheduled.filter((a) => Date.parse(a.start_at) >= startOfDay && Date.parse(a.start_at) < endOfDay);
+  const upcoming = scheduled.filter((a) => Date.parse(a.start_at) >= endOfDay).slice(0, 5);
   const pendingTransfers = transfers.filter((x) => x.status === "pending");
   const unreviewed = results.filter((r) => !r.reviewed);
-  const flagged = unreviewed.filter((r) => r.safetyFlag);
-  const patientName = (id: string) => patients.find((p) => p.id === id)?.displayName ?? "—";
+  const flagged = unreviewed.filter((r) => r.safety_flag);
+  const patientName = (id: string) => patients.find((p) => p.id === id)?.display_name ?? "—";
 
   const hour = now.getHours();
   const greeting = hour < 12 ? t("goodMorning") : hour < 18 ? t("goodAfternoon") : t("goodEvening");
-  const name = (locale === "ar" && profile?.displayNameAr) || profile?.displayName || "";
+  const name = (locale === "ar" && profile?.display_name_ar) || profile?.display_name || "";
 
   return (
     <>
@@ -51,8 +51,8 @@ export default function Overview() {
           <span>{t("safetyAlertHelp")}</span>
           <div className="row" style={{ flexWrap: "wrap" }}>
             {flagged.map((r) => (
-              <Link key={r.id} className="btn danger small" href={`/patients/file?id=${r.patientId}&tab=assessments`}>
-                {patientName(r.patientId)} · {r.formCode}
+              <Link key={r.assignment_id} className="btn danger small" href={`/patients/file?id=${r.patient_id}&tab=assessments`}>
+                {patientName(r.patient_id)} · {r.form_code}
               </Link>
             ))}
           </div>
@@ -70,16 +70,16 @@ export default function Overview() {
         <Card title={t("todaySessions")}>
           {today.length === 0 && <Empty text={t("noSessionsToday")} />}
           {today.map((a) => (
-            <div key={a.id} className="list-item" style={{ cursor: "pointer" }} onClick={() => router.push(`/patients/file?id=${a.patientId}`)}>
-              <Avatar name={a.patientName} />
+            <div key={a.id} className="list-item" style={{ cursor: "pointer" }} onClick={() => router.push(`/patients/file?id=${a.patient_id}`)}>
+              <Avatar name={a.patient_name} />
               <div className="spacer">
-                <strong>{a.patientName}</strong>
+                <strong>{a.patient_name}</strong>
                 <div className="small muted">
-                  {formatTime(a.start.toDate())} · {t(a.mode)}
+                  {formatTime(a.start_at)} · {t(a.mode)}
                 </div>
               </div>
-              {a.meetingUrl ? (
-                <a className="btn small" href={a.meetingUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+              {a.meeting_url ? (
+                <a className="btn small" href={a.meeting_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
                   {t("video")}
                 </a>
               ) : null}
@@ -91,11 +91,11 @@ export default function Overview() {
           {upcoming.length === 0 && <Empty />}
           {upcoming.map((a) => (
             <div key={a.id} className="list-item">
-              <Avatar name={a.patientName} />
+              <Avatar name={a.patient_name} />
               <div className="spacer">
-                <strong>{a.patientName}</strong>
+                <strong>{a.patient_name}</strong>
                 <div className="small muted">
-                  {formatDate(a.start.toDate())} · {formatTime(a.start.toDate())}
+                  {formatDate(a.start_at)} · {formatTime(a.start_at)}
                 </div>
               </div>
             </div>
@@ -105,15 +105,15 @@ export default function Overview() {
         <Card title={t("newResults")} action={<Link className="small muted" href="/assessments">{t("all")}</Link>}>
           {unreviewed.length === 0 && <Empty />}
           {unreviewed.slice(0, 5).map((r) => (
-            <div key={r.id} className="list-item" style={{ cursor: "pointer" }} onClick={() => router.push(`/patients/file?id=${r.patientId}&tab=assessments`)}>
-              <Avatar name={patientName(r.patientId)} />
+            <div key={r.assignment_id} className="list-item" style={{ cursor: "pointer" }} onClick={() => router.push(`/patients/file?id=${r.patient_id}&tab=assessments`)}>
+              <Avatar name={patientName(r.patient_id)} />
               <div className="spacer">
-                <strong>{patientName(r.patientId)}</strong>
+                <strong>{patientName(r.patient_id)}</strong>
                 <div className="small muted">
-                  {r.formCode} · {t("score")} {r.score}/{r.maxScore}
+                  {r.form_code} · {t("score")} {r.score}/{r.max_score}
                 </div>
               </div>
-              <SeverityBadge level={r.severityLevel} label={r.severity} />
+              <SeverityBadge level={r.severity_level} label={r.severity} />
             </div>
           ))}
         </Card>
@@ -122,11 +122,11 @@ export default function Overview() {
           {pendingTransfers.length === 0 && <Empty />}
           {pendingTransfers.map((x) => (
             <div key={x.id} className="list-item">
-              <Avatar name={x.patientName} />
+              <Avatar name={x.patient_name} />
               <div className="spacer">
-                <strong>{x.patientName}</strong>
+                <strong>{x.patient_name}</strong>
                 <div className="small muted">
-                  {t("from")} {x.fromPractitionerName}
+                  {t("from")} {x.from_practitioner_name}
                 </div>
               </div>
             </div>

@@ -1,10 +1,11 @@
-import type { TimestampLike } from '@chester/shared';
+type DateInput = string | Date;
+const toDate = (d: DateInput) => (d instanceof Date ? d : new Date(d));
 
-export const formatDate = (ts: TimestampLike | Date) =>
-  (ts instanceof Date ? ts : ts.toDate()).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+export const formatDate = (d: DateInput) =>
+  toDate(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
-export const formatTime = (ts: TimestampLike | Date) =>
-  (ts instanceof Date ? ts : ts.toDate()).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+export const formatTime = (d: DateInput) =>
+  toDate(d).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
 export function greeting(date = new Date()) {
   const h = date.getHours();

@@ -3,7 +3,6 @@
 import type { AssessmentResult, SeverityBand } from "@chester/shared";
 import { useState } from "react";
 
-import type { WithId } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 
 const W = 520;
@@ -21,13 +20,13 @@ export function ScoreChart({
   bands,
 }: {
   title: string;
-  results: WithId<AssessmentResult>[];
+  results: AssessmentResult[];
   maxScore: number;
   bands: SeverityBand[];
 }) {
   const { formatDate, formatShortDate, dir, severityLabel } = useI18n();
   const [hover, setHover] = useState<number | null>(null);
-  const points = [...results].sort((a, b) => a.completedAt.toMillis() - b.completedAt.toMillis());
+  const points = [...results].sort((a, b) => Date.parse(a.completed_at) - Date.parse(b.completed_at));
   if (points.length === 0) return null;
 
   const innerW = W - PAD.left - PAD.right;
@@ -48,8 +47,8 @@ export function ScoreChart({
         <strong>{title}</strong>
         <span className="small muted">
           {active
-            ? `${formatDate(active.completedAt.toDate())} · ${active.score}/${maxScore} · ${severityLabel(active.severityLevel, active.severity)}`
-            : `${last.score}/${maxScore} · ${severityLabel(last.severityLevel, last.severity)}`}
+            ? `${formatDate(active.completed_at)} · ${active.score}/${maxScore} · ${severityLabel(active.severity_level, active.severity)}`
+            : `${last.score}/${maxScore} · ${severityLabel(last.severity_level, last.severity)}`}
         </span>
       </figcaption>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={title} onMouseLeave={() => setHover(null)}>
@@ -71,14 +70,14 @@ export function ScoreChart({
           <line x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + innerH} stroke="var(--muted)" strokeWidth={1} />
         )}
         {points.map((p, i) => (
-          <g key={p.id} onMouseEnter={() => setHover(i)}>
+          <g key={p.assignment_id} onMouseEnter={() => setHover(i)}>
             {/* Larger invisible hit target than the visible dot. */}
             <circle cx={x(i)} cy={y(p.score)} r={12} fill="transparent" />
             <circle
               cx={x(i)}
               cy={y(p.score)}
               r={hover === i ? 6 : 4}
-              fill={p.safetyFlag ? "var(--danger)" : "var(--primary)"}
+              fill={p.safety_flag ? "var(--danger)" : "var(--primary)"}
               stroke="var(--surface)"
               strokeWidth={2}
             />
@@ -86,11 +85,11 @@ export function ScoreChart({
         ))}
         {/* First and last dates, anchored inward so they never clip at the edges. */}
         <text x={x(0)} y={H - 6} fontSize={10} fill="var(--faint)" textAnchor={points.length > 1 ? "start" : "middle"}>
-          {formatShortDate(points[0].completedAt.toDate())}
+          {formatShortDate(points[0].completed_at)}
         </text>
         {points.length > 1 && (
           <text x={x(points.length - 1)} y={H - 6} fontSize={10} fill="var(--faint)" textAnchor="end">
-            {formatShortDate(last.completedAt.toDate())}
+            {formatShortDate(last.completed_at)}
           </text>
         )}
       </svg>

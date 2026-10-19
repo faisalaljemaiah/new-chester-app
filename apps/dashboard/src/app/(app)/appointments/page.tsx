@@ -1,31 +1,30 @@
 "use client";
 
 import type { Appointment, AppointmentStatus } from "@chester/shared";
-import { doc, updateDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { Card, Empty, Modal, StatusBadge, Tabs } from "@/components/ui";
 import { useAuth } from "@/lib/auth";
-import { api, db } from "@/lib/firebase";
-import type { WithId } from "@/lib/hooks";
 import { useI18n } from "@/lib/i18n";
 import { useMyAppointments } from "@/lib/queries";
+import { must, rpc, supabase } from "@/lib/supabase";
 
 export default function AppointmentsPage() {
   const { user } = useAuth();
   const { t, formatDate, formatTime } = useI18n();
   const router = useRouter();
-  const { data, loading } = useMyAppointments(user?.uid);
+  const { data, loading } = useMyAppointments(user?.id);
   const [tab, setTab] = useState<"upcoming" | "past">("upcoming");
-  const [linkFor, setLinkFor] = useState<WithId<Appointment> | null>(null);
+  const [linkFor, setLinkFor] = useState<Appointment | null>(null);
 
   const now = Date.now();
-  const upcoming = data.filter((a) => a.status === "scheduled" && a.end.toMillis() > now);
+  const upcoming = data.filter((a) => a.status === "scheduled" && Date.parse(a.end_at) > now);
   const past = data.filter((a) => !upcoming.includes(a)).reverse();
   const rows = tab === "upcoming" ? upcoming : past;
 
-  const setStatus = (id: string, status: AppointmentStatus) => updateDoc(doc(db, "appointments", id), { status });
+  const setStatus = (id: string, status: AppointmentStatus) =>
+    must(supabase.from("appointments").update({ status }).eq("id", id)).catch(console.error);
 
   return (
     <>
@@ -58,14 +57,14 @@ export default function AppointmentsPage() {
             </thead>
             <tbody>
               {rows.map((a) => {
-                const started = a.start.toMillis() <= now;
+                const started = Date.parse(a.start_at) <= now;
                 return (
                   <tr key={a.id}>
-                    <td>{formatDate(a.start.toDate())}</td>
-                    <td>{formatTime(a.start.toDate())}</td>
+                    <td>{formatDate(a.start_at)}</td>
+                    <td>{formatTime(a.start_at)}</td>
                     <td>
-                      <button className="btn ghost small" onClick={() => router.push(`/patients/file?id=${a.patientId}`)}>
-                        {a.patientName}
+                      <button className="btn ghost small" onClick={() => router.push(`/patients/file?id=${a.patient_id}`)}>
+                        {a.patient_name}
                       </button>
                     </td>
                     <td>{t(a.mode)}</td>
@@ -92,7 +91,7 @@ export default function AppointmentsPage() {
                             {!started && (
                               <button
                                 className="btn danger small"
-                                onClick={() => api.cancelAppointment({ appointmentId: a.id })}>
+                                onClick={() => rpc("cancel_appointment", { p_appointment: a.id, p_reason: null }).catch(console.error)}>
                                 {t("cancelSession")}
                               </button>
                             )}
@@ -124,9 +123,9 @@ export default function AppointmentsPage() {
   );
 }
 
-function MeetingLinkModal({ appointment, onClose }: { appointment: WithId<Appointment>; onClose: () => void }) {
+function MeetingLinkModal({ appointment, onClose }: { appointment: Appointment; onClose: () => void }) {
   const { t } = useI18n();
-  const [url, setUrl] = useState(appointment.meetingUrl ?? "");
+  const [url, setUrl] = useState(appointment.meeting_url ?? "");
   const valid = /^https:\/\/\S+$/.test(url.trim());
   return (
     <Modal title={t("meetingLink")} onClose={onClose}>
@@ -136,7 +135,11 @@ function MeetingLinkModal({ appointment, onClose }: { appointment: WithId<Appoin
         <button
           className="btn"
           disabled={!valid}
-          onClick={() => updateDoc(doc(db, "appointments", appointment.id), { meetingUrl: url.trim() }).then(onClose)}>
+          onClick={() =>
+            must(supabase.from("appointments").update({ meeting_url: url.trim() }).eq("id", appointment.id))
+              .then(onClose)
+              .catch(console.error)
+          }>
           {t("save")}
         </button>
       </div>

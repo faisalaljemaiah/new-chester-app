@@ -1,12 +1,11 @@
 "use client";
 
-import { sendPasswordResetEmail, signInWithEmailAndPassword } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 
 import { useAuth } from "@/lib/auth";
-import { auth } from "@/lib/firebase";
 import { useI18n } from "@/lib/i18n";
+import { resetLink, supabase } from "@/lib/supabase";
 
 export default function LoginPage() {
   const { t, locale, setLocale } = useI18n();
@@ -16,25 +15,35 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [recovering, setRecovering] = useState(resetLink.pending);
 
   const isStaff = role === "practitioner" || role === "admin";
   useEffect(() => {
-    if (!loading && user && isStaff) router.replace("/");
-  }, [loading, user, isStaff, router]);
+    if (!recovering && !loading && user && isStaff) router.replace("/");
+  }, [recovering, loading, user, isStaff, router]);
+
+  // A patient account that is already signed in (e.g. from the patient app) can't use the portal.
+  useEffect(() => {
+    if (!recovering && !loading && user && role === "patient") {
+      void signOut();
+      setMessage(t("notStaff"));
+    }
+  }, [recovering, loading, user, role, signOut, t]);
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setMessage(null);
     try {
-      const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
-      const token = await cred.user.getIdTokenResult(true);
-      if (token.claims.role !== "practitioner" && token.claims.role !== "admin") {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) throw error;
+      // The role lives in profiles; only staff may use the portal.
+      const { data: account } = await supabase.from("profiles").select("role").eq("id", data.user.id).maybeSingle();
+      if (account?.role !== "practitioner" && account?.role !== "admin") {
         await signOut();
         setMessage(t("notStaff"));
       } else {
-        // Reload so the auth context picks up the fresh claims.
-        window.location.assign("/");
+        router.replace("/");
       }
     } catch {
       setMessage(t("wrongCredentials"));
@@ -43,10 +52,49 @@ export default function LoginPage() {
     }
   }
 
+  // Patients' reset links land here too, so this works for every account.
+  async function saveNewPassword(e: FormEvent) {
+    e.preventDefault();
+    if (password.length < 8) return setMessage(t("passwordTooShort"));
+    setBusy(true);
+    const { error } = await supabase.auth.updateUser({ password });
+    setBusy(false);
+    if (error) return setMessage(error.message);
+    setPassword("");
+    await signOut();
+    resetLink.pending = false;
+    setRecovering(false);
+    setMessage(t("passwordSaved"));
+  }
+
   async function reset() {
     if (!email.trim()) return;
-    await sendPasswordResetEmail(auth, email.trim()).catch(() => {});
+    await supabase.auth
+      .resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin + "/login" })
+      .catch(() => {});
     setMessage(t("resetSent"));
+  }
+
+  if (recovering) {
+    return (
+      <div className="login">
+        <form className="card stack" onSubmit={saveNewPassword}>
+          <h2>{t("newPassword")}</h2>
+          <input
+            className="input"
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          {message && <div className="notice small">{message}</div>}
+          <button className="btn" disabled={busy || !user}>
+            {t("savePassword")}
+          </button>
+        </form>
+      </div>
+    );
   }
 
   return (

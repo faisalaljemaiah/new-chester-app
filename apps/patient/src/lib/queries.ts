@@ -1,39 +1,51 @@
-import { collection, orderBy, query, where } from 'firebase/firestore';
-import { useMemo } from 'react';
-
 import type { Appointment, AssessmentAssignment, Conversation, Practitioner } from '@chester/shared';
 
-import { db } from './firebase';
-import { useQuery } from './hooks';
+import { useRows } from './hooks';
+import { supabase } from './supabase';
 
 export function usePractitioners() {
-  const q = useMemo(() => query(collection(db, 'practitioners'), where('active', '==', true)), []);
-  return useQuery<Practitioner>(q);
+  return useRows<Practitioner>(
+    'practitioners',
+    () => supabase.from('practitioners').select('*').eq('active', true).order('display_name'),
+    ['practitioners'],
+  );
 }
 
 export function useMyAppointments(uid: string | undefined) {
-  const q = useMemo(
-    () => (uid ? query(collection(db, 'appointments'), where('patientId', '==', uid), orderBy('start', 'desc')) : null),
-    [uid],
+  return useRows<Appointment>(
+    uid ? `appointments:${uid}` : null,
+    () => supabase.from('appointments').select('*').eq('patient_id', uid!).order('start_at', { ascending: false }),
+    ['appointments'],
   );
-  return useQuery<Appointment>(q);
 }
 
 export function useMyConversations(uid: string | undefined) {
-  const q = useMemo(
-    () => (uid ? query(collection(db, 'conversations'), where('patientId', '==', uid)) : null),
-    [uid],
+  return useRows<Conversation>(
+    uid ? `conversations:${uid}` : null,
+    () =>
+      supabase
+        .from('conversations')
+        .select('*')
+        .eq('patient_id', uid!)
+        .order('last_message_at', { ascending: false, nullsFirst: false }),
+    ['conversations'],
   );
-  return useQuery<Conversation>(q);
 }
 
 export function useMyAssessments(uid: string | undefined) {
-  const q = useMemo(
+  return useRows<AssessmentAssignment>(
+    uid ? `assessments:${uid}` : null,
     () =>
-      uid
-        ? query(collection(db, 'assessmentAssignments'), where('patientId', '==', uid), orderBy('sentAt', 'desc'))
-        : null,
-    [uid],
+      supabase.from('assessment_assignments').select('*').eq('patient_id', uid!).order('sent_at', { ascending: false }),
+    ['assessment_assignments'],
   );
-  return useQuery<AssessmentAssignment>(q);
+}
+
+/** Start times already booked for a practitioner on a date (no patient details). */
+export function useBookedTimes(practitionerId: string | undefined, date: string) {
+  return useRows<string>(
+    practitionerId ? `booked:${practitionerId}:${date}` : null,
+    () => supabase.rpc('booked_times', { p_practitioner: practitionerId!, p_date: date }),
+    ['appointments'],
+  );
 }

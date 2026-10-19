@@ -7,6 +7,7 @@ import { useEffect, useMemo, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth";
 import { useI18n, type MessageKey } from "@/lib/i18n";
 import { useMyResults, usePendingAvailabilityRequests, useTransfers } from "@/lib/queries";
+import { resetLink } from "@/lib/supabase";
 
 import { Avatar } from "./ui";
 
@@ -30,11 +31,12 @@ export function Shell({ children }: { children: ReactNode }) {
   const isStaff = role === "practitioner" || role === "admin";
 
   useEffect(() => {
-    if (!loading && (!user || !isStaff)) router.replace("/login");
+    // A password-reset link may land here; the new-password form is on the login page.
+    if (resetLink.pending || (!loading && (!user || !isStaff))) router.replace("/login");
   }, [loading, user, isStaff, router]);
 
-  const { data: incoming } = useTransfers(isStaff ? user?.uid : undefined, "toPractitionerId");
-  const { data: results } = useMyResults(isStaff ? user?.uid : undefined);
+  const { data: incoming } = useTransfers(isStaff ? user?.id : undefined, "to_practitioner_id");
+  const { data: results } = useMyResults(isStaff ? user?.id : undefined);
   const { data: pendingRequests } = usePendingAvailabilityRequests(isAdmin);
 
   const badges = useMemo<Partial<Record<MessageKey, number>>>(
@@ -73,10 +75,10 @@ export function Shell({ children }: { children: ReactNode }) {
           })}
         <div className="sidebar-footer">
           <div className="row" style={{ padding: "8px" }}>
-            <Avatar name={profile?.displayName ?? user.email ?? ""} />
+            <Avatar name={profile?.display_name ?? user.email ?? ""} />
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600 }}>
-                {(locale === "ar" && profile?.displayNameAr) || profile?.displayName}
+                {(locale === "ar" && profile?.display_name_ar) || profile?.display_name}
               </div>
               <div className="small muted">{isAdmin ? "Admin" : profile?.title}</div>
             </div>

@@ -1,8 +1,8 @@
 # New Chester Clinic
 
-Online psychiatry and psychology clinic: a patient app (Expo) and a bilingual practitioner dashboard (Next.js) on Firebase.
+Online psychiatry and psychology clinic: a patient app (Expo) and a bilingual practitioner dashboard (Next.js) on Supabase.
 
-See [docs/PLAN.md](docs/PLAN.md) for the full plan, data model and open decisions.
+See [docs/PLAN.md](docs/PLAN.md) for the full plan, data model, open decisions and the Supabase setup steps.
 
 | | |
 |---|---|
@@ -13,39 +13,29 @@ See [docs/PLAN.md](docs/PLAN.md) for the full plan, data model and open decision
 ```
 apps/patient      Expo app for patients (iOS, Android, web)
 apps/dashboard    Next.js practitioner dashboard (English / Arabic)
-packages/shared   Types, theme, slot calculation, questionnaire scoring
-functions         Cloud Functions (booking, transfers, scoring, roles)
-firebase          Security rules, indexes, firebase.json, rules tests
+packages/shared   Row types, theme, slot calculation, questionnaire scoring
+supabase          Database migration (tables, access rules, functions), seed data, access tests
 ```
 
-## Run it locally on demo data
+## Run it
 
-Requires Node 22 and Java (for the Firestore emulator).
+Requires Node 22 and a Supabase project with the migration and seed applied (see "Setting up the Supabase project" in [docs/PLAN.md](docs/PLAN.md)).
 
 ```bash
 npm install
-npm run build -w functions
-npm run emulators                 # terminal 1: auth, Firestore and functions emulators
-npm run demo -w functions         # terminal 2: loads demo patients and practitioners
 
-# Dashboard: http://localhost:3000
-cp apps/dashboard/.env.emulator apps/dashboard/.env.local
-npm run dashboard
+# Put the project URL and publishable key in both files
+cp apps/dashboard/.env.example apps/dashboard/.env.local
+cp apps/patient/.env.example apps/patient/.env.local
 
-# Patient app (press w for web, or scan the QR code with Expo Go)
-cp apps/patient/.env.emulator apps/patient/.env.local
-npm run patient
+npm run dashboard   # http://localhost:3000
+npm run patient     # press w for web, or scan the QR code with Expo Go
 ```
-
-Demo sign-ins, all with password `demo-password`: `admin@demo.clinic` (admin and psychiatrist), `layla@demo.clinic` (psychologist), `patient@demo.clinic` (patient).
 
 ## Checks
 
 ```bash
-npm run typecheck     # all packages
-npm run test:rules    # Firestore security rules on the emulator
+npm run typecheck   # all packages
+npm run test:db     # access rules and database functions, on an in-process Postgres
+npm run seed:sql    # regenerate supabase/seed.sql after changing the questionnaires
 ```
-
-## Deploying
-
-No Firebase project is connected yet. Follow "Setting up the real Firebase project" in [docs/PLAN.md](docs/PLAN.md).

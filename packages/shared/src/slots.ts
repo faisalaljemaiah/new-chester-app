@@ -1,7 +1,7 @@
 import type { Practitioner } from "./types";
 
-// Bookable slot calculation. The patient app uses it to show "Available today";
-// the bookAppointment function runs the same code to validate a request.
+// Bookable slot calculation. The patient app uses it to show free times; the database's
+// is_offered_slot() applies the same rules when a booking comes in.
 
 export interface Slot {
   /** yyyy-mm-dd in the practitioner's time zone */
@@ -21,8 +21,8 @@ const toHHMM = (minutes: number) =>
 /** Weekday (0 = Sunday) of an ISO date, independent of the device time zone. */
 export const weekdayOf = (isoDate: string) => new Date(`${isoDate}T12:00:00Z`).getUTCDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
-export function isBlocked(practitioner: Pick<Practitioner, "blockedRanges">, isoDate: string) {
-  return practitioner.blockedRanges.some((r) => isoDate >= r.from && isoDate <= r.to);
+export function isBlocked(practitioner: Pick<Practitioner, "blocked_ranges">, isoDate: string) {
+  return practitioner.blocked_ranges.some((r) => isoDate >= r.from && isoDate <= r.to);
 }
 
 /**
@@ -30,16 +30,16 @@ export function isBlocked(practitioner: Pick<Practitioner, "blockedRanges">, iso
  * @param taken start times ("HH:mm") already booked that day
  */
 export function slotsForDate(
-  practitioner: Pick<Practitioner, "weeklyHours" | "blockedRanges" | "extraDays" | "sessionMinutes">,
+  practitioner: Pick<Practitioner, "weekly_hours" | "blocked_ranges" | "extra_days" | "session_minutes">,
   isoDate: string,
   taken: string[] = [],
 ): Slot[] {
   if (isBlocked(practitioner, isoDate)) return [];
   const windows = [
-    ...(practitioner.weeklyHours[weekdayOf(isoDate)] ?? []),
-    ...practitioner.extraDays.filter((d) => d.date === isoDate).map(({ start, end }) => ({ start, end })),
+    ...(practitioner.weekly_hours[String(weekdayOf(isoDate))] ?? []),
+    ...practitioner.extra_days.filter((d) => d.date === isoDate).map(({ start, end }) => ({ start, end })),
   ];
-  const step = practitioner.sessionMinutes;
+  const step = practitioner.session_minutes;
   const times = new Set<string>();
   for (const w of windows) {
     for (let t = toMinutes(w.start); t + step <= toMinutes(w.end); t += step) times.add(toHHMM(t));

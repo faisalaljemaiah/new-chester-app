@@ -1,17 +1,17 @@
 "use client";
 
-import type { Practitioner, Role } from "@chester/shared";
-import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { doc, onSnapshot } from "firebase/firestore";
+import type { Practitioner, Profile, Role } from "@chester/shared";
+import type { User } from "@supabase/supabase-js";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 
-import { auth, db } from "./firebase";
+import { useLive } from "./hooks";
+import { supabase } from "./supabase";
 
 interface StaffAuth {
   user: User | null;
   role: Role | null;
   isAdmin: boolean;
-  profile: (Practitioner & { id: string }) | null;
+  profile: Practitioner | null;
   loading: boolean;
   signOut: () => Promise<void>;
 }
@@ -20,33 +20,46 @@ const AuthContext = createContext<StaffAuth | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [role, setRole] = useState<Role | null>(null);
-  const [profile, setProfile] = useState<StaffAuth["profile"]>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(
-    () =>
-      onAuthStateChanged(auth, async (u) => {
-        setUser(u);
-        // The role lives in a custom claim set by Cloud Functions; security rules trust the same claim.
-        const token = u ? await u.getIdTokenResult() : null;
-        setRole((token?.claims.role as Role | undefined) ?? null);
-        if (!u) setProfile(null);
-        setLoading(false);
-      }),
-    [],
-  );
+  const [sessionLoaded, setSessionLoaded] = useState(false);
 
   useEffect(() => {
-    if (!user || (role !== "practitioner" && role !== "admin")) return;
-    return onSnapshot(doc(db, "practitioners", user.uid), (snap) =>
-      setProfile(snap.exists() ? { id: snap.id, ...(snap.data() as Practitioner) } : null),
-    );
-  }, [user, role]);
+    void supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+      setSessionLoaded(true);
+    });
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  const uid = user?.id ?? null;
+  // The role lives in the profiles table; only database functions can change it.
+  const account = useLive<Profile>(
+    uid,
+    () => supabase.from("profiles").select("*").eq("id", uid!).maybeSingle(),
+    ["profiles"],
+  );
+  const role = account.data?.role ?? null;
+  const isStaff = role === "practitioner" || role === "admin";
+  const practitioner = useLive<Practitioner>(
+    isStaff ? uid : null,
+    () => supabase.from("practitioners").select("*").eq("id", uid!).maybeSingle(),
+    ["practitioners"],
+  );
+
+  const loading = !sessionLoaded || account.loading || practitioner.loading;
 
   return (
     <AuthContext.Provider
-      value={{ user, role, isAdmin: role === "admin", profile, loading, signOut: () => signOut(auth) }}>
+      value={{
+        user,
+        role,
+        isAdmin: role === "admin",
+        profile: practitioner.data,
+        loading,
+        signOut: async () => {
+          await supabase.auth.signOut();
+        },
+      }}>
       {children}
     </AuthContext.Provider>
   );
