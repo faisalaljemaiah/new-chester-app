@@ -39,17 +39,23 @@ export default function Welcome() {
       />
 
       <SafeAreaView style={styles.content}>
-        <View style={{ gap: spacing.lg, marginTop: spacing.xl }}>
-          <View style={styles.titleRow}>
-            <Text style={[styles.title, rtlText]}>
-              {t('welcomeLine1')}
-              {'\n'}
-              {t('welcomeLine2')}
-              {'\n'}
-              <Text style={[styles.title, { color: colors.primary }]}>{t('welcomeLine3')}</Text>
-            </Text>
+        <View style={{ gap: spacing.lg, marginTop: spacing.sm }}>
+          <View style={styles.topRow}>
+            <Image
+              source={require('../../assets/images/logo-white.png')}
+              style={styles.logo}
+              contentFit="contain"
+              accessibilityLabel="New Chester Virtual Clinics"
+            />
             <LanguageButton tone="light" />
           </View>
+          <Text style={[styles.title, rtlText]}>
+            {t('welcomeLine1')}
+            {'\n'}
+            {t('welcomeLine2')}
+            {'\n'}
+            <Text style={[styles.title, { color: colors.primary }]}>{t('welcomeLine3')}</Text>
+          </Text>
           <Text style={[styles.subtitle, rtlText]}>
             {t('welcomeSubtitle')}
           </Text>
@@ -76,8 +82,9 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: backdrop, direction: 'ltr' },
   shade: { position: 'absolute', left: 0, right: 0, height: '35%' },
   content: { flex: 1, justifyContent: 'space-between', padding: spacing.xl },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
-  title: { fontSize: 46, lineHeight: 52, fontWeight: '700', color: '#FFFFFF', letterSpacing: -1.2 },
+  logo: { width: 104, height: 58 },
+  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
+  title: { maxWidth: 260, fontSize: 44, lineHeight: 50, fontWeight: '700', color: '#FFFFFF', letterSpacing: -1.2 },
   subtitle: { fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.82)', maxWidth: 190 },
   button: {
     flexDirection: 'row',
