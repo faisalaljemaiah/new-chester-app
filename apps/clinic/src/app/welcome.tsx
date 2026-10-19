@@ -1,89 +1,77 @@
 import { colors, radius, spacing } from '@chester/shared';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { StyleSheet, View } from 'react-native';
+import { StatusBar } from 'expo-status-bar';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, Icon, Text } from '@/components/ui';
+import { Icon, Text } from '@/components/ui';
 
-/** First screen, modelled on the "Your Health, Simplified" screen of the reference. */
+/** Matches the dark hospital background of the photo, so the edges blend on tall screens. */
+const backdrop = '#141B26';
+
+/** First screen: full-screen doctor photo with the title on top and a white Get Started button. */
 export default function Welcome() {
   return (
-    <SafeAreaView style={styles.root}>
-      <View style={styles.badge}>
-        <Icon ios="brain.head.profile" material="psychology" color={colors.primary} size={28} />
-      </View>
-
-      <View style={{ gap: spacing.md }}>
-        <Text variant="hero">
-          Your Mind,{'\n'}
-          <Text variant="hero" style={{ color: colors.primary }}>
-            Cared For
-          </Text>
-        </Text>
-        <Text variant="muted" style={{ maxWidth: 280 }}>
-          Psychiatry and psychology sessions online. Private, professional, and on your schedule.
-        </Text>
-      </View>
-
-      {/* Placeholder cropped from the reference design; replace with a photo the clinic owns. */}
-      <View style={styles.photoArea}>
-        <View style={styles.photoGlow} />
-        <Image source={require('../../assets/images/welcome-doctor.png')} style={styles.photo} contentFit="cover" />
-      </View>
-
-      <View style={{ gap: spacing.md }}>
-        <Feature ios="lock.shield" material="shield_lock" text="Secure & private sessions" />
-        <Feature ios="person.2" material="groups" text="Licensed psychiatrists & psychologists" />
-      </View>
-
-      <Button
-        title="Get Started"
-        onPress={() => router.push('/sign-in')}
-        icon={<Icon ios="arrow.right" material="arrow_forward" color={colors.onPrimary} size={18} />}
+    <View style={styles.root}>
+      <StatusBar style="light" />
+      {/* Photo supplied by the clinic; confirm the licence before launch. */}
+      <Image
+        source={require('../../assets/images/welcome-hero.jpg')}
+        style={StyleSheet.absoluteFill}
+        contentFit="cover"
+        contentPosition="top"
       />
-    </SafeAreaView>
-  );
-}
+      <LinearGradient
+        colors={['rgba(20,27,38,0.55)', 'rgba(20,27,38,0)']}
+        style={[styles.shade, { top: 0 }]}
+      />
+      <LinearGradient
+        colors={['rgba(20,27,38,0)', 'rgba(20,27,38,0.9)']}
+        style={[styles.shade, { bottom: 0 }]}
+      />
 
-function Feature({ ios, material, text }: { ios: string; material: string; text: string }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
-      <View style={styles.featureIcon}>
-        <Icon ios={ios} material={material} color={colors.primary} size={18} />
-      </View>
-      <Text variant="muted">{text}</Text>
+      <SafeAreaView style={styles.content}>
+        <View style={{ gap: spacing.lg, marginTop: spacing.xl }}>
+          <Text style={styles.title}>
+            Your{'\n'}Mind,{'\n'}
+            <Text style={[styles.title, { color: colors.primary }]}>Cared For</Text>
+          </Text>
+          <Text style={styles.subtitle}>
+            Expert care, anytime, anywhere. Your wellbeing is our priority.
+          </Text>
+        </View>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push('/sign-in')}
+          style={({ pressed }) => [styles.button, pressed && { opacity: 0.85 }]}
+        >
+          <Text style={styles.buttonText}>Get Started</Text>
+          <Icon ios="arrow.right" material="arrow_forward" color={colors.primary} size={20} />
+        </Pressable>
+      </SafeAreaView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.background, padding: spacing.xl, gap: spacing.xl },
-  badge: {
-    alignSelf: 'flex-end',
-    width: 52,
-    height: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
+  root: { flex: 1, backgroundColor: backdrop },
+  shade: { position: 'absolute', left: 0, right: 0, height: '35%' },
+  content: { flex: 1, justifyContent: 'space-between', padding: spacing.xl },
+  title: { fontSize: 46, lineHeight: 52, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
+  subtitle: { fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.82)', maxWidth: 190 },
+  button: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.pill,
+    paddingVertical: 18,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
   },
-  photoArea: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
-  photoGlow: {
-    position: 'absolute',
-    right: -40,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: colors.primarySoft,
-  },
-  photo: { height: '100%', maxHeight: 360, aspectRatio: 3 / 7, borderRadius: radius.xl },
-  featureIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.sm,
-    backgroundColor: colors.primarySoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  buttonText: { fontSize: 18, fontWeight: '600', color: colors.primary },
 });
