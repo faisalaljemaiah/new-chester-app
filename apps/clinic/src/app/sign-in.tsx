@@ -247,10 +247,10 @@ function friendlyError(e: unknown) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, paddingTop: 240, gap: spacing.lg, maxWidth: 480, width: '100%', alignSelf: 'center' },
-  greeting: { fontSize: 22, color: colors.textMuted },
-  title: { fontSize: 40, fontWeight: '800', color: colors.text, letterSpacing: 1 },
+  greeting: { fontSize: 26, color: colors.textMuted },
+  title: { fontSize: 54, lineHeight: 62, fontWeight: '800', color: colors.text, letterSpacing: 1 },
   field: { gap: 2 },
-  label: { fontSize: 13, color: colors.textMuted },
+  label: { fontSize: 15, fontWeight: '500', color: colors.textMuted },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
