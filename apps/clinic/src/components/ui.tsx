@@ -16,6 +16,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useI18n } from '@/lib/i18n';
+
 type SymbolName = ComponentProps<typeof SymbolView>['name'];
 
 /** SF Symbol on iOS, Material Symbol on Android and web. */
@@ -55,17 +57,20 @@ export function Screen({
   );
 }
 
+// Sizes, weights and tracking follow Apple's type scale (San Francisco is the system font on Apple devices).
 const textVariants = {
-  hero: { fontSize: 40, fontWeight: '700', lineHeight: 46, color: colors.text },
-  title: { fontSize: 24, fontWeight: '700', color: colors.text },
-  heading: { fontSize: 17, fontWeight: '600', color: colors.text },
+  hero: { fontSize: 40, fontWeight: '700', lineHeight: 46, color: colors.text, letterSpacing: -0.8 },
+  title: { fontSize: 24, fontWeight: '700', color: colors.text, letterSpacing: -0.4 },
+  heading: { fontSize: 17, fontWeight: '600', color: colors.text, letterSpacing: -0.2 },
   body: { fontSize: 15, color: colors.text },
   muted: { fontSize: 14, color: colors.textMuted },
   small: { fontSize: 12, color: colors.textMuted },
 } as const;
 
 export function Text({ variant = 'body', style, ...props }: TextProps & { variant?: keyof typeof textVariants }) {
-  return <RNText {...props} style={[textVariants[variant], style]} />;
+  // Tighter tracking breaks the joins between Arabic letters, so it is dropped in Arabic.
+  const { dir } = useI18n();
+  return <RNText {...props} style={[textVariants[variant], dir === 'rtl' && { letterSpacing: 0 }, style]} />;
 }
 
 export function Card({

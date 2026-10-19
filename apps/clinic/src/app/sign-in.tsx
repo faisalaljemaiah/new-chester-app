@@ -88,7 +88,7 @@ export default function SignIn() {
           <View style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
             {!signUp && <Text style={styles.greeting}>{t('authWelcome')}</Text>}
             <View style={styles.titleRow}>
-              <Text style={[styles.title, dir === 'rtl' && { fontSize: 40, lineHeight: 56 }]}>
+              <Text style={[styles.title, dir === 'rtl' && { fontSize: 40, lineHeight: 56, letterSpacing: 0 }]}>
                 {signUp ? t('authSignUp') : t('authLogin')}
               </Text>
               <LanguageButton />
@@ -256,8 +256,8 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, paddingTop: 240, gap: spacing.lg, maxWidth: 480, width: '100%', alignSelf: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
-  greeting: { fontSize: 26, color: colors.textMuted },
-  title: { flexShrink: 1, fontSize: 54, lineHeight: 62, fontWeight: '800', color: colors.text, letterSpacing: 1 },
+  greeting: { fontSize: 26, fontWeight: '500', color: colors.textMuted, letterSpacing: -0.4 },
+  title: { flexShrink: 1, fontSize: 54, lineHeight: 62, fontWeight: '700', color: colors.text, letterSpacing: -1.5 },
   field: { gap: 2 },
   label: { fontSize: 15, fontWeight: '500', color: colors.textMuted },
   inputRow: {
@@ -278,7 +278,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  pillText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  pillText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600', letterSpacing: -0.2 },
   outlineButton: {
     flex: 1,
     height: 52,
@@ -289,6 +289,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.primary,
   },
-  outlineText: { color: colors.primary, fontSize: 16, fontWeight: '700' },
+  outlineText: { color: colors.primary, fontSize: 17, fontWeight: '600', letterSpacing: -0.2 },
   dot: { position: 'absolute', borderRadius: 999 },
 });

@@ -18,7 +18,7 @@ export default function Welcome() {
   const { t, dir } = useI18n();
   // The photo stays the same in both languages, so the text keeps to the left (away from the face)
   // and is right-aligned for Arabic.
-  const rtlText = dir === 'rtl' ? ({ textAlign: 'right', writingDirection: 'rtl' } as const) : null;
+  const rtlText = dir === 'rtl' ? ({ textAlign: 'right', writingDirection: 'rtl', letterSpacing: 0 } as const) : null;
   return (
     <View style={styles.root}>
       <StatusBar style="light" />
@@ -77,7 +77,7 @@ const styles = StyleSheet.create({
   shade: { position: 'absolute', left: 0, right: 0, height: '35%' },
   content: { flex: 1, justifyContent: 'space-between', padding: spacing.xl },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
-  title: { fontSize: 46, lineHeight: 52, fontWeight: '700', color: '#FFFFFF', letterSpacing: -0.5 },
+  title: { fontSize: 46, lineHeight: 52, fontWeight: '700', color: '#FFFFFF', letterSpacing: -1.2 },
   subtitle: { fontSize: 15, lineHeight: 22, color: 'rgba(255,255,255,0.82)', maxWidth: 190 },
   button: {
     flexDirection: 'row',
@@ -90,5 +90,5 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     marginBottom: spacing.md,
   },
-  buttonText: { fontSize: 18, fontWeight: '600', color: colors.primary },
+  buttonText: { fontSize: 17, fontWeight: '600', color: colors.primary, letterSpacing: -0.2 },
 });
