@@ -1,4 +1,5 @@
 import { colors, radius, spacing } from '@chester/shared';
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,7 +26,11 @@ export default function Welcome() {
         </Text>
       </View>
 
-      <View style={{ flex: 1 }} />
+      {/* Placeholder cropped from the reference design; replace with a photo the clinic owns. */}
+      <View style={styles.photoArea}>
+        <View style={styles.photoGlow} />
+        <Image source={require('../../assets/images/welcome-doctor.png')} style={styles.photo} contentFit="cover" />
+      </View>
 
       <View style={{ gap: spacing.md }}>
         <Feature ios="lock.shield" material="shield_lock" text="Secure & private sessions" />
@@ -63,6 +68,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  photoArea: { flex: 1, alignItems: 'flex-end', justifyContent: 'center' },
+  photoGlow: {
+    position: 'absolute',
+    right: -40,
+    width: 260,
+    height: 260,
+    borderRadius: 130,
+    backgroundColor: colors.primarySoft,
+  },
+  photo: { height: '100%', maxHeight: 360, aspectRatio: 3 / 7, borderRadius: radius.xl },
   featureIcon: {
     width: 36,
     height: 36,
