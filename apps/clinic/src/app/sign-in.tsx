@@ -2,9 +2,21 @@ import { colors, radius, spacing } from '@chester/shared';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 
-import { Button, Screen, Text } from '@/components/ui';
+import { Icon, Text } from '@/components/ui';
 import { supabase } from '@/lib/supabase';
 
 export default function SignIn() {
@@ -13,6 +25,7 @@ export default function SignIn() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -56,20 +69,30 @@ export default function SignIn() {
     setMessage('If that email has an account, a reset link is on its way.');
   }
 
-  return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Screen>
-        <Text variant="title">{mode === 'sign-in' ? 'Welcome back' : 'Create your account'}</Text>
-        <Text variant="muted">
-          {mode === 'sign-in' ? 'Sign in to see your sessions and messages.' : 'It takes less than a minute.'}
-        </Text>
+  const signUp = mode === 'sign-up';
+  const mismatch = signUp && confirm.length > 0 && confirm !== password;
 
-        <View style={{ gap: spacing.md, marginTop: spacing.md }}>
-          {mode === 'sign-up' && (
+  function switchMode(next: 'sign-in' | 'sign-up') {
+    setMode(next);
+    setMessage(null);
+  }
+
+  return (
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <Decor />
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <View style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
+            {!signUp && <Text style={styles.greeting}>Welcome!</Text>}
+            <Text style={styles.title}>{signUp ? 'Sign up' : 'Login'}</Text>
+          </View>
+
+          {signUp && (
             <>
-              <Field placeholder="Full name" value={name} onChangeText={setName} autoComplete="name" />
+              <Field label="Name" icon={['person', 'person']} value={name} onChangeText={setName} autoComplete="name" />
               <Field
-                placeholder="Phone (optional)"
+                label="Phone (optional)"
+                icon={['phone', 'call']}
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
@@ -78,7 +101,8 @@ export default function SignIn() {
             </>
           )}
           <Field
-            placeholder="Email"
+            label="Email"
+            icon={['envelope', 'mail']}
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -86,41 +110,127 @@ export default function SignIn() {
             autoComplete="email"
           />
           <Field
-            placeholder="Password"
+            label="Password"
+            icon={['key', 'key']}
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            autoComplete={mode === 'sign-in' ? 'current-password' : 'new-password'}
+            autoComplete={signUp ? 'new-password' : 'current-password'}
           />
-        </View>
+          {signUp && (
+            <Field
+              label="Confirm Password"
+              icon={['key', 'key']}
+              value={confirm}
+              onChangeText={setConfirm}
+              secureTextEntry
+              autoComplete="new-password"
+            />
+          )}
 
-        {message ? <Text style={{ color: colors.warning }}>{message}</Text> : null}
+          {!signUp && (
+            <Pressable onPress={resetPassword} style={{ alignSelf: 'flex-end', paddingVertical: spacing.xs }}>
+              <Text style={styles.linkText}>Forgot Password?</Text>
+            </Pressable>
+          )}
 
-        <Button
-          title={mode === 'sign-in' ? 'Sign In' : 'Create Account'}
-          onPress={submit}
-          loading={busy}
-          disabled={!email || !password || (mode === 'sign-up' && !name)}
-        />
+          {mismatch ? <Text style={styles.message}>The passwords don't match.</Text> : null}
+          {message ? <Text style={styles.message}>{message}</Text> : null}
 
-        <Pressable onPress={() => setMode(mode === 'sign-in' ? 'sign-up' : 'sign-in')} style={styles.link}>
-          <Text variant="muted">
-            {mode === 'sign-in' ? "Don't have an account? " : 'Already have an account? '}
-            <Text style={{ color: colors.primary }}>{mode === 'sign-in' ? 'Sign up' : 'Sign in'}</Text>
-          </Text>
-        </Pressable>
-        {mode === 'sign-in' && (
-          <Pressable onPress={resetPassword} style={styles.link}>
-            <Text variant="small">Forgot password?</Text>
-          </Pressable>
-        )}
-      </Screen>
+          {signUp ? (
+            <View style={{ alignItems: 'center', gap: spacing.md, marginTop: spacing.xl }}>
+              <GradientButton
+                title="Sign Up"
+                onPress={submit}
+                busy={busy}
+                style={{ width: 200 }}
+                disabled={!name || !email || !password || confirm !== password}
+              />
+              <Pressable onPress={() => switchMode('sign-in')} style={{ padding: spacing.sm }}>
+                <Text style={styles.linkText}>I am already a member</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.buttonRow}>
+              <Pressable
+                onPress={() => switchMode('sign-up')}
+                style={({ pressed }) => [styles.outlineButton, pressed && { opacity: 0.8 }]}
+              >
+                <Text style={styles.outlineText}>Sign Up</Text>
+              </Pressable>
+              <GradientButton title="Log In" onPress={submit} busy={busy} style={{ flex: 1 }} disabled={!email || !password} />
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
     </KeyboardAvoidingView>
   );
 }
 
-function Field(props: React.ComponentProps<typeof TextInput>) {
-  return <TextInput placeholderTextColor={colors.textFaint} style={styles.input} {...props} />;
+/** Purple corner shape and circles, after the reference design. */
+function Decor() {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width={300} height={230} style={{ position: 'absolute', top: 0, left: 0 }}>
+        <Defs>
+          <SvgGradient id="blob" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={colors.primaryPressed} />
+            <Stop offset="1" stopColor="#B9A4F7" />
+          </SvgGradient>
+        </Defs>
+        <Path d="M0 0 H270 C 270 120 170 200 0 225 Z" fill="url(#blob)" />
+      </Svg>
+      <View style={[styles.dot, { top: 42, right: 70, width: 56, height: 56, backgroundColor: colors.primary }]} />
+      <View style={[styles.dot, { top: 48, right: 28, width: 30, height: 30, backgroundColor: colors.primaryPressed }]} />
+      <View style={[styles.dot, { top: 102, right: 48, width: 40, height: 40, backgroundColor: '#B9A4F7' }]} />
+    </View>
+  );
+}
+
+function GradientButton({
+  title,
+  onPress,
+  busy,
+  disabled,
+  style,
+}: {
+  style?: object;
+  title: string;
+  onPress: () => void;
+  busy: boolean;
+  disabled: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled || busy}
+      style={({ pressed }) => [styles.pill, style, { opacity: disabled ? 0.5 : pressed ? 0.85 : 1 }]}
+    >
+      <LinearGradient
+        colors={[colors.primary, colors.primaryPressed]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 0 }}
+        style={[StyleSheet.absoluteFill, { borderRadius: radius.pill }]}
+      />
+      {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.pillText}>{title}</Text>}
+    </Pressable>
+  );
+}
+
+function Field({
+  label,
+  icon,
+  ...props
+}: React.ComponentProps<typeof TextInput> & { label: string; icon: [ios: string, material: string] }) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      <View style={styles.inputRow}>
+        <TextInput placeholderTextColor={colors.textFaint} style={styles.input} {...props} />
+        <Icon ios={icon[0]} material={icon[1]} color={colors.primary} size={20} />
+      </View>
+    </View>
+  );
 }
 
 function friendlyError(e: unknown) {
@@ -135,15 +245,41 @@ function friendlyError(e: unknown) {
 }
 
 const styles = StyleSheet.create({
-  input: {
-    height: 54,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    color: colors.text,
-    fontSize: 15,
+  root: { flex: 1, backgroundColor: colors.background },
+  content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, paddingTop: 240, gap: spacing.lg, maxWidth: 480, width: '100%', alignSelf: 'center' },
+  greeting: { fontSize: 22, color: colors.textMuted },
+  title: { fontSize: 40, fontWeight: '800', color: colors.text, letterSpacing: 1 },
+  field: { gap: 2 },
+  label: { fontSize: 13, color: colors.textMuted },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    gap: spacing.sm,
   },
-  link: { alignItems: 'center', paddingVertical: spacing.sm },
+  input: { flex: 1, height: 44, color: colors.text, fontSize: 16, outlineStyle: 'none' } as object,
+  linkText: { fontSize: 14, color: colors.primary, fontWeight: '500' },
+  message: { color: colors.warning, textAlign: 'center' },
+  buttonRow: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.xl },
+  pill: {
+    height: 52,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  pillText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700' },
+  outlineButton: {
+    flex: 1,
+    height: 52,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: colors.primary,
+  },
+  outlineText: { color: colors.primary, fontSize: 16, fontWeight: '700' },
+  dot: { position: 'absolute', borderRadius: 999 },
 });
