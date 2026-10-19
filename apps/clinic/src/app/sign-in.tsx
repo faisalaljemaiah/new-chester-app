@@ -2,7 +2,6 @@ import { colors, radius, spacing } from '@chester/shared';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   ActivityIndicator,
@@ -87,12 +86,6 @@ export default function SignIn() {
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
-            <Image
-              source={require('../../assets/images/logo.png')}
-              style={styles.logo}
-              contentFit="contain"
-              accessibilityLabel="New Chester Virtual Clinics"
-            />
             {!signUp && <Text style={styles.greeting}>{t('authWelcome')}</Text>}
             <View style={styles.titleRow}>
               <Text style={[styles.title, dir === 'rtl' && { fontSize: 40, lineHeight: 56, letterSpacing: 0 }]}>
@@ -261,8 +254,7 @@ function friendlyError(e: unknown): MessageKey {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, paddingTop: 230, gap: spacing.lg, maxWidth: 480, width: '100%', alignSelf: 'center' },
-  logo: { width: 140, height: 78, marginBottom: spacing.sm },
+  content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, paddingTop: 240, gap: spacing.lg, maxWidth: 480, width: '100%', alignSelf: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   greeting: { fontSize: 26, fontWeight: '500', color: colors.textMuted, letterSpacing: -0.4 },
   title: { flexShrink: 1, fontSize: 54, lineHeight: 62, fontWeight: '700', color: colors.text, letterSpacing: -1.5 },
