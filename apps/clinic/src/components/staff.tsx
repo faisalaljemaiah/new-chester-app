@@ -12,8 +12,8 @@ import { useI18n, type MessageKey } from '@/lib/i18n';
 
 const tones = {
   primary: { bg: colors.primarySoft, fg: colors.primary },
-  success: { bg: '#163327', fg: colors.success },
-  warning: { bg: '#3A2F14', fg: colors.warning },
+  success: { bg: colors.successSoft, fg: colors.success },
+  warning: { bg: colors.warningSoft, fg: colors.warning },
   danger: { bg: colors.dangerSoft, fg: colors.danger },
   neutral: { bg: colors.surfaceRaised, fg: colors.textMuted },
 } as const;
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceRaised,
   },
   choiceActive: { backgroundColor: colors.primary },
-  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(31,26,51,0.35)' },
   sheet: {
     maxHeight: '85%',
     backgroundColor: colors.surface,
