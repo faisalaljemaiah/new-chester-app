@@ -16,7 +16,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 
+import { LanguageButton } from '@/components/LanguageButton';
 import { Icon, Text } from '@/components/ui';
+import { useI18n, type MessageKey } from '@/lib/i18n';
 import { supabase } from '@/lib/supabase';
 
 export default function SignIn() {
@@ -27,7 +29,8 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<MessageKey | null>(null);
+  const { t, dir } = useI18n();
 
   async function submit() {
     setBusy(true);
@@ -44,7 +47,7 @@ export default function SignIn() {
         if (!data.session) {
           // Email confirmation is on: the account works once they click the link.
           setMode('sign-in');
-          setMessage('Check your email and tap the link to confirm your account, then sign in.');
+          setMessage('checkEmailToConfirm');
           return;
         }
       } else {
@@ -61,12 +64,12 @@ export default function SignIn() {
   }
 
   async function resetPassword() {
-    if (!email.trim()) return setMessage('Enter your email first.');
+    if (!email.trim()) return setMessage('enterEmailFirst');
     // The link opens the app's reset screen (add this URL under Supabase Auth > URL Configuration).
     await supabase.auth
       .resetPasswordForEmail(email.trim(), { redirectTo: Linking.createURL('/reset-password') })
       .catch(() => {});
-    setMessage('If that email has an account, a reset link is on its way.');
+    setMessage('resetSent');
   }
 
   const signUp = mode === 'sign-up';
@@ -78,20 +81,25 @@ export default function SignIn() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView style={[styles.root, { direction: dir }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Decor />
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
-            {!signUp && <Text style={styles.greeting}>Welcome!</Text>}
-            <Text style={styles.title}>{signUp ? 'Sign up' : 'Login'}</Text>
+            {!signUp && <Text style={styles.greeting}>{t('authWelcome')}</Text>}
+            <View style={styles.titleRow}>
+              <Text style={[styles.title, dir === 'rtl' && { fontSize: 40, lineHeight: 56 }]}>
+                {signUp ? t('authSignUp') : t('authLogin')}
+              </Text>
+              <LanguageButton />
+            </View>
           </View>
 
           {signUp && (
             <>
-              <Field label="Name" icon={['person', 'person']} value={name} onChangeText={setName} autoComplete="name" />
+              <Field label={t('fieldName')} icon={['person', 'person']} value={name} onChangeText={setName} autoComplete="name" />
               <Field
-                label="Phone (optional)"
+                label={t('fieldPhone')}
                 icon={['phone', 'call']}
                 value={phone}
                 onChangeText={setPhone}
@@ -101,7 +109,7 @@ export default function SignIn() {
             </>
           )}
           <Field
-            label="Email"
+            label={t('email')}
             icon={['envelope', 'mail']}
             value={email}
             onChangeText={setEmail}
@@ -110,7 +118,7 @@ export default function SignIn() {
             autoComplete="email"
           />
           <Field
-            label="Password"
+            label={t('password')}
             icon={['key', 'key']}
             value={password}
             onChangeText={setPassword}
@@ -119,7 +127,7 @@ export default function SignIn() {
           />
           {signUp && (
             <Field
-              label="Confirm Password"
+              label={t('fieldConfirmPassword')}
               icon={['key', 'key']}
               value={confirm}
               onChangeText={setConfirm}
@@ -130,24 +138,24 @@ export default function SignIn() {
 
           {!signUp && (
             <Pressable onPress={resetPassword} style={{ alignSelf: 'flex-end', paddingVertical: spacing.xs }}>
-              <Text style={styles.linkText}>Forgot Password?</Text>
+              <Text style={styles.linkText}>{t('forgotPasswordTitle')}</Text>
             </Pressable>
           )}
 
-          {mismatch ? <Text style={styles.message}>The passwords don't match.</Text> : null}
-          {message ? <Text style={styles.message}>{message}</Text> : null}
+          {mismatch ? <Text style={styles.message}>{t('passwordsDontMatch')}</Text> : null}
+          {message ? <Text style={styles.message}>{t(message)}</Text> : null}
 
           {signUp ? (
             <View style={{ alignItems: 'center', gap: spacing.md, marginTop: spacing.xl }}>
               <GradientButton
-                title="Sign Up"
+                title={t('signUpButton')}
                 onPress={submit}
                 busy={busy}
                 style={{ width: 200 }}
                 disabled={!name || !email || !password || confirm !== password}
               />
               <Pressable onPress={() => switchMode('sign-in')} style={{ padding: spacing.sm }}>
-                <Text style={styles.linkText}>I am already a member</Text>
+                <Text style={styles.linkText}>{t('alreadyMember')}</Text>
               </Pressable>
             </View>
           ) : (
@@ -156,9 +164,9 @@ export default function SignIn() {
                 onPress={() => switchMode('sign-up')}
                 style={({ pressed }) => [styles.outlineButton, pressed && { opacity: 0.8 }]}
               >
-                <Text style={styles.outlineText}>Sign Up</Text>
+                <Text style={styles.outlineText}>{t('signUpButton')}</Text>
               </Pressable>
-              <GradientButton title="Log In" onPress={submit} busy={busy} style={{ flex: 1 }} disabled={!email || !password} />
+              <GradientButton title={t('logInButton')} onPress={submit} busy={busy} style={{ flex: 1 }} disabled={!email || !password} />
             </View>
           )}
         </ScrollView>
@@ -233,22 +241,23 @@ function Field({
   );
 }
 
-function friendlyError(e: unknown) {
+function friendlyError(e: unknown): MessageKey {
   const code = (e as { code?: string }).code ?? '';
-  if (code === 'invalid_credentials') return 'Email or password is incorrect.';
-  if (code === 'email_not_confirmed') return 'Please confirm your email first. Check your inbox for the link.';
-  if (code === 'user_already_exists' || code === 'email_exists') return 'That email already has an account. Try signing in.';
-  if (code === 'weak_password') return 'Use a password with at least 8 characters.';
-  if (code === 'email_address_invalid' || code === 'validation_failed') return 'That email address does not look right.';
-  if (code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit') return 'Too many attempts. Please wait a few minutes.';
-  return 'Something went wrong. Please try again.';
+  if (code === 'invalid_credentials') return 'wrongCredentials';
+  if (code === 'email_not_confirmed') return 'emailNotConfirmed';
+  if (code === 'user_already_exists' || code === 'email_exists') return 'emailExists';
+  if (code === 'weak_password') return 'weakPassword';
+  if (code === 'email_address_invalid' || code === 'validation_failed') return 'emailInvalid';
+  if (code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit') return 'tooManyAttempts';
+  return 'error';
 }
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, paddingTop: 240, gap: spacing.lg, maxWidth: 480, width: '100%', alignSelf: 'center' },
+  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
   greeting: { fontSize: 26, color: colors.textMuted },
-  title: { fontSize: 54, lineHeight: 62, fontWeight: '800', color: colors.text, letterSpacing: 1 },
+  title: { flexShrink: 1, fontSize: 54, lineHeight: 62, fontWeight: '800', color: colors.text, letterSpacing: 1 },
   field: { gap: 2 },
   label: { fontSize: 15, fontWeight: '500', color: colors.textMuted },
   inputRow: {
