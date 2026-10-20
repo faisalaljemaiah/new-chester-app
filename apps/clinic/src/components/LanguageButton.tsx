@@ -1,6 +1,7 @@
 import { colors, radius, spacing } from '@chester/shared';
-import { Pressable, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 
+import { PressableScale } from '@/components/motion';
 import { Icon, Text } from '@/components/ui';
 import { useI18n } from '@/lib/i18n';
 
@@ -9,20 +10,17 @@ export function LanguageButton({ tone = 'dark' }: { tone?: 'light' | 'dark' }) {
   const { locale, setLocale } = useI18n();
   const color = tone === 'light' ? '#FFFFFF' : colors.primary;
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       accessibilityLabel={locale === 'en' ? 'Switch to Arabic' : 'التبديل إلى الإنجليزية'}
       onPress={() => setLocale(locale === 'en' ? 'ar' : 'en')}
       hitSlop={8}
-      style={({ pressed }) => [
-        styles.button,
-        { borderColor: color, backgroundColor: tone === 'light' ? 'rgba(255,255,255,0.12)' : colors.primarySoft },
-        pressed && { opacity: 0.7 },
-      ]}
+      style={[styles.button,
+        { borderColor: color, backgroundColor: tone === 'light' ? 'rgba(255,255,255,0.12)' : colors.primarySoft }]}
     >
       <Icon ios="globe" material="language" color={color} size={18} />
       <Text style={[styles.label, { color }]}>{locale === 'en' ? 'عربي' : 'EN'}</Text>
-    </Pressable>
+    </PressableScale>
   );
 }
 

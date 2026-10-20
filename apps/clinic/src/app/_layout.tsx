@@ -26,10 +26,10 @@ export default function RootLayout() {
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="welcome" />
-          <Stack.Screen name="sign-in" />
+          <Stack.Screen name="sign-in" options={{ animation: 'fade' }} />
           <Stack.Screen name="reset-password" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="staff" />
+          <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+          <Stack.Screen name="staff" options={{ animation: 'fade' }} />
           <Stack.Screen name="practitioner/[id]" />
           <Stack.Screen name="session/[id]" />
           <Stack.Screen name="chat/[id]" />

@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FadeInView, PressableScale } from '@/components/motion';
 import { useI18n } from '@/lib/i18n';
 
 type SymbolName = ComponentProps<typeof SymbolView>['name'];
@@ -48,10 +49,14 @@ export function Screen({
     <SafeAreaView edges={edges} style={styles.screen}>
       {scroll ? (
         <ScrollView contentContainerStyle={styles.screenContent} showsVerticalScrollIndicator={false}>
-          {children}
+          <FadeInView rise={false} style={{ gap: spacing.lg }}>
+            {children}
+          </FadeInView>
         </ScrollView>
       ) : (
-        <View style={[styles.screenContent, { flex: 1 }]}>{children}</View>
+        <FadeInView rise={false} style={[styles.screenContent, { flex: 1 }]}>
+          {children}
+        </FadeInView>
       )}
     </SafeAreaView>
   );
@@ -84,9 +89,9 @@ export function Card({
 }) {
   if (!onPress) return <View style={[styles.card, style]}>{children}</View>;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed, style]}>
+    <PressableScale onPress={onPress} scaleTo={0.98} style={[styles.card, style]}>
       {children}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -108,15 +113,11 @@ export function Button({
   const bg = { primary: colors.primary, secondary: colors.surfaceRaised, danger: colors.dangerSoft }[variant];
   const fg = { primary: colors.onPrimary, secondary: colors.text, danger: colors.danger }[variant];
   return (
-    <Pressable
+    <PressableScale
       accessibilityRole="button"
       onPress={onPress}
       disabled={disabled || loading}
-      style={({ pressed }) => [
-        styles.button,
-        { backgroundColor: bg, opacity: disabled ? 0.5 : 1 },
-        pressed && styles.pressed,
-      ]}>
+      style={[styles.button, { backgroundColor: bg, opacity: disabled ? 0.5 : 1 }]}>
       {loading ? (
         <ActivityIndicator color={fg} />
       ) : (
@@ -125,7 +126,7 @@ export function Button({
           {icon}
         </>
       )}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -175,18 +176,15 @@ export function Chip({
   onPress?: () => void;
 }) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
-      style={({ pressed }) => [
-        styles.chip,
-        selected && { backgroundColor: colors.primary, borderColor: colors.primary },
-        pressed && styles.pressed,
-      ]}>
+      scaleTo={0.93}
+      style={[styles.chip, selected && { backgroundColor: colors.primary, borderColor: colors.primary }]}>
       <RNText style={[styles.chipLabel, selected && { color: colors.onPrimary }]}>{label}</RNText>
       {sublabel ? (
         <RNText style={[styles.chipSub, selected && { color: colors.onPrimary }]}>{sublabel}</RNText>
       ) : null}
-    </Pressable>
+    </PressableScale>
   );
 }
 

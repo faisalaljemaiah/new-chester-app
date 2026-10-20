@@ -2,9 +2,11 @@ import { colors, radius, spacing } from '@chester/shared';
 import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import type { ComponentProps } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { PressableScale } from '@/components/motion';
 import { Icon, Loading, Text } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 
@@ -22,7 +24,7 @@ export default function TabsLayout() {
   if (isStaff) return <Redirect href="/staff" />;
 
   return (
-    <Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false }}>
+    <Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false, animation: 'fade' }}>
       {tabs.map((t) => (
         <Tabs.Screen
           key={t.name}
@@ -50,7 +52,7 @@ function FloatingTabBar({ state, navigateToTab }: TabBarProps) {
           if (!tab) return null;
           const focused = state.index === index;
           return (
-            <Pressable
+            <PressableScale
               key={route.key}
               accessibilityRole="tab"
               accessibilityLabel={tab.title}
@@ -58,8 +60,12 @@ function FloatingTabBar({ state, navigateToTab }: TabBarProps) {
               onPress={() => !focused && navigateToTab(route.key)}
               style={[styles.item, focused && styles.itemActive]}>
               <Icon ios={tab.ios} material={tab.material} color={focused ? colors.onPrimary : colors.textMuted} size={22} />
-              {focused && <Text style={styles.label}>{tab.title}</Text>}
-            </Pressable>
+              {focused && (
+                <Animated.View entering={FadeIn.duration(220)}>
+                  <Text style={styles.label}>{tab.title}</Text>
+                </Animated.View>
+              )}
+            </PressableScale>
           );
         })}
       </View>

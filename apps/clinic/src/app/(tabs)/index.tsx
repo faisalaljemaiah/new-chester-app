@@ -3,9 +3,10 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
+import { ScrollView, StyleSheet, View, type ScrollViewInstance } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { FadeInView, PressableScale } from '@/components/motion';
 import { Avatar, Card, Empty, Icon, Text } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { firstName, formatDate, formatTime, greeting } from '@/lib/format';
@@ -42,13 +43,13 @@ export default function Home() {
   return (
     <SafeAreaView edges={['top']} style={styles.root}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.push('/(tabs)/profile')} hitSlop={8}>
+        <PressableScale onPress={() => router.push('/(tabs)/profile')} hitSlop={8}>
           <Avatar name={patient?.display_name ?? '?'} size={40} />
-        </Pressable>
+        </PressableScale>
         <Text style={styles.brand}>NEW CHESTER</Text>
-        <Pressable onPress={() => router.push('/(tabs)/messages')} style={styles.iconButton} hitSlop={8}>
+        <PressableScale onPress={() => router.push('/(tabs)/messages')} style={styles.iconButton} hitSlop={8}>
           <Icon ios="bell" material="notifications" color={colors.text} size={22} />
-        </Pressable>
+        </PressableScale>
       </View>
 
       <ScrollView ref={scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -57,25 +58,25 @@ export default function Home() {
         </Text>
 
         {/* Who we are */}
-        <View style={styles.banner}>
+        <FadeInView index={0} style={styles.banner}>
           <Image source={require('../../../assets/images/banner-doctor.jpg')} style={styles.bannerPhoto} contentFit="cover" />
           <View style={styles.bannerText}>
             <Text style={styles.bannerEyebrow}>WHO WE ARE</Text>
             <Text style={styles.bannerTitle}>A family-run clinic</Text>
             <Text style={styles.bannerBody}>Heart-to-heart care, where you're treated like family.</Text>
-            <Pressable
+            <PressableScale
               onPress={() => scroll.current?.scrollTo({ y: teamY, animated: true })}
-              style={({ pressed }) => [styles.bannerButton, pressed && { opacity: 0.85 }]}>
+              style={styles.bannerButton}>
               <Text style={styles.bannerButtonText}>Meet our team</Text>
-            </Pressable>
+            </PressableScale>
           </View>
-        </View>
+        </FadeInView>
 
-        <View style={styles.services}>
+        <FadeInView index={1} style={styles.services}>
           {services.map((s) => {
             const active = discipline === s.key;
             return (
-              <Pressable
+              <PressableScale
                 key={s.key}
                 style={styles.service}
                 onPress={() => {
@@ -89,10 +90,10 @@ export default function Home() {
                 <Text variant="small" style={{ color: colors.text }}>
                   {s.label}
                 </Text>
-              </Pressable>
+              </PressableScale>
             );
           })}
-        </View>
+        </FadeInView>
 
         {upcoming && (
           <Card onPress={() => router.push(`/session/${upcoming.id}`)} style={styles.row}>
@@ -115,8 +116,10 @@ export default function Home() {
           <Text variant="muted">The people who will look after you and your family.</Text>
         </View>
         {shown.length === 0 ? <Empty text="No practitioners in this area yet." /> : null}
-        {shown.map((p) => (
-          <PractitionerCard key={p.id} p={p} />
+        {shown.map((p, i) => (
+          <FadeInView key={p.id} index={i + 3}>
+            <PractitionerCard p={p} />
+          </FadeInView>
         ))}
       </ScrollView>
     </SafeAreaView>
@@ -133,7 +136,7 @@ function PractitionerCard({ p }: { p: Practitioner }) {
     .join('')
     .toUpperCase();
   return (
-    <Pressable onPress={open} style={({ pressed }) => [styles.doctorCard, pressed && { opacity: 0.95 }]}>
+    <PressableScale onPress={open} scaleTo={0.98} style={styles.doctorCard}>
       {p.photo_url ? (
         <Image source={{ uri: p.photo_url }} style={StyleSheet.absoluteFill} contentFit="cover" />
       ) : (
@@ -163,11 +166,11 @@ function PractitionerCard({ p }: { p: Practitioner }) {
           <Text style={styles.doctorName}>{p.display_name}</Text>
           <Text style={styles.doctorTitle}>{p.title}</Text>
         </View>
-        <Pressable onPress={open} style={({ pressed }) => [styles.bookButton, pressed && { opacity: 0.85 }]}>
+        <PressableScale onPress={open} style={styles.bookButton}>
           <Text style={styles.bookText}>Book Now</Text>
-        </Pressable>
+        </PressableScale>
       </View>
-    </Pressable>
+    </PressableScale>
   );
 }
 

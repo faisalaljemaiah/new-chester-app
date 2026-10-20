@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
@@ -16,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient as SvgGradient, Path, Stop } from 'react-native-svg';
 
+import { FadeInView, PressableScale } from '@/components/motion';
 import { LanguageButton } from '@/components/LanguageButton';
 import { Icon, Text } from '@/components/ui';
 import { useI18n, type MessageKey } from '@/lib/i18n';
@@ -41,7 +41,12 @@ export default function SignIn() {
         const { data, error } = await supabase.auth.signUp({
           email: email.trim(),
           password,
-          options: { data: { display_name: name.trim(), phone: phone.trim() || undefined } },
+          options: {
+            data: {
+              display_name: name.trim(),
+              phone: phone.trim() || undefined,
+            },
+          },
         });
         if (error) throw error;
         if (!data.session) {
@@ -51,7 +56,10 @@ export default function SignIn() {
           return;
         }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
+        });
         if (error) throw error;
       }
       // The start screen picks patient or staff screens from the account's role.
@@ -67,7 +75,9 @@ export default function SignIn() {
     if (!email.trim()) return setMessage('enterEmailFirst');
     // The link opens the app's reset screen (add this URL under Supabase Auth > URL Configuration).
     await supabase.auth
-      .resetPasswordForEmail(email.trim(), { redirectTo: Linking.createURL('/reset-password') })
+      .resetPasswordForEmail(email.trim(), {
+        redirectTo: Linking.createURL('/reset-password'),
+      })
       .catch(() => {});
     setMessage('resetSent');
   }
@@ -81,94 +91,120 @@ export default function SignIn() {
   }
 
   return (
-    <KeyboardAvoidingView style={[styles.root, { direction: dir }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardAvoidingView
+      style={[styles.root, { direction: dir }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Decor />
       <SafeAreaView style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
-            {!signUp && <Text style={styles.greeting}>{t('authWelcome')}</Text>}
-            <View style={styles.titleRow}>
-              <Text style={[styles.title, dir === 'rtl' && { fontSize: 40, lineHeight: 56, letterSpacing: 0 }]}>
-                {signUp ? t('authSignUp') : t('authLogin')}
-              </Text>
-              <LanguageButton />
+          <FadeInView key={mode} style={{ gap: spacing.lg }}>
+            <View style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
+              {!signUp && <Text style={styles.greeting}>{t('authWelcome')}</Text>}
+              <View style={styles.titleRow}>
+                <Text
+                  style={[
+                    styles.title,
+                    dir === 'rtl' && {
+                      fontSize: 40,
+                      lineHeight: 56,
+                      letterSpacing: 0,
+                    },
+                  ]}>
+                  {signUp ? t('authSignUp') : t('authLogin')}
+                </Text>
+                <LanguageButton />
+              </View>
             </View>
-          </View>
 
-          {signUp && (
-            <>
-              <Field label={t('fieldName')} icon={['person', 'person']} value={name} onChangeText={setName} autoComplete="name" />
-              <Field
-                label={t('fieldPhone')}
-                icon={['phone', 'call']}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                autoComplete="tel"
-              />
-            </>
-          )}
-          <Field
-            label={t('email')}
-            icon={['envelope', 'mail']}
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoComplete="email"
-          />
-          <Field
-            label={t('password')}
-            icon={['key', 'key']}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            autoComplete={signUp ? 'new-password' : 'current-password'}
-          />
-          {signUp && (
+            {signUp && (
+              <>
+                <Field
+                  label={t('fieldName')}
+                  icon={['person', 'person']}
+                  value={name}
+                  onChangeText={setName}
+                  autoComplete="name"
+                />
+                <Field
+                  label={t('fieldPhone')}
+                  icon={['phone', 'call']}
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  autoComplete="tel"
+                />
+              </>
+            )}
             <Field
-              label={t('fieldConfirmPassword')}
-              icon={['key', 'key']}
-              value={confirm}
-              onChangeText={setConfirm}
-              secureTextEntry
-              autoComplete="new-password"
+              label={t('email')}
+              icon={['envelope', 'mail']}
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
             />
-          )}
-
-          {!signUp && (
-            <Pressable onPress={resetPassword} style={{ alignSelf: 'flex-end', paddingVertical: spacing.xs }}>
-              <Text style={styles.linkText}>{t('forgotPasswordTitle')}</Text>
-            </Pressable>
-          )}
-
-          {mismatch ? <Text style={styles.message}>{t('passwordsDontMatch')}</Text> : null}
-          {message ? <Text style={styles.message}>{t(message)}</Text> : null}
-
-          {signUp ? (
-            <View style={{ alignItems: 'center', gap: spacing.md, marginTop: spacing.xl }}>
-              <GradientButton
-                title={t('signUpButton')}
-                onPress={submit}
-                busy={busy}
-                style={{ width: 200 }}
-                disabled={!name || !email || !password || confirm !== password}
+            <Field
+              label={t('password')}
+              icon={['key', 'key']}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete={signUp ? 'new-password' : 'current-password'}
+            />
+            {signUp && (
+              <Field
+                label={t('fieldConfirmPassword')}
+                icon={['key', 'key']}
+                value={confirm}
+                onChangeText={setConfirm}
+                secureTextEntry
+                autoComplete="new-password"
               />
-              <Pressable onPress={() => switchMode('sign-in')} style={{ padding: spacing.sm }}>
-                <Text style={styles.linkText}>{t('alreadyMember')}</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <View style={styles.buttonRow}>
-              <Pressable
-                onPress={() => switchMode('sign-up')}
-                style={({ pressed }) => [styles.outlineButton, pressed && { opacity: 0.8 }]}
-              >
-                <Text style={styles.outlineText}>{t('signUpButton')}</Text>
-              </Pressable>
-              <GradientButton title={t('logInButton')} onPress={submit} busy={busy} style={{ flex: 1 }} disabled={!email || !password} />
-            </View>
-          )}
+            )}
+
+            {!signUp && (
+              <PressableScale onPress={resetPassword} style={{ alignSelf: 'flex-end', paddingVertical: spacing.xs }}>
+                <Text style={styles.linkText}>{t('forgotPasswordTitle')}</Text>
+              </PressableScale>
+            )}
+
+            {mismatch ? <Text style={styles.message}>{t('passwordsDontMatch')}</Text> : null}
+            {message ? <Text style={styles.message}>{t(message)}</Text> : null}
+
+            {signUp ? (
+              <View
+                style={{
+                  alignItems: 'center',
+                  gap: spacing.md,
+                  marginTop: spacing.xl,
+                }}>
+                <GradientButton
+                  title={t('signUpButton')}
+                  onPress={submit}
+                  busy={busy}
+                  style={{ width: 200 }}
+                  disabled={!name || !email || !password || confirm !== password}
+                />
+                <PressableScale onPress={() => switchMode('sign-in')} style={{ padding: spacing.sm }}>
+                  <Text style={styles.linkText}>{t('alreadyMember')}</Text>
+                </PressableScale>
+              </View>
+            ) : (
+              <View style={styles.buttonRow}>
+                <PressableScale onPress={() => switchMode('sign-up')} style={[styles.outlineButton]}>
+                  <Text style={styles.outlineText}>{t('signUpButton')}</Text>
+                </PressableScale>
+                <GradientButton
+                  title={t('logInButton')}
+                  onPress={submit}
+                  busy={busy}
+                  style={{ flex: 1 }}
+                  disabled={!email || !password}
+                />
+              </View>
+            )}
+          </FadeInView>
         </ScrollView>
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -188,9 +224,42 @@ function Decor() {
         </Defs>
         <Path d="M0 0 H270 C 270 120 170 200 0 225 Z" fill="url(#blob)" />
       </Svg>
-      <View style={[styles.dot, { top: 42, right: 70, width: 56, height: 56, backgroundColor: colors.primary }]} />
-      <View style={[styles.dot, { top: 48, right: 28, width: 30, height: 30, backgroundColor: colors.primaryPressed }]} />
-      <View style={[styles.dot, { top: 102, right: 48, width: 40, height: 40, backgroundColor: '#B9A4F7' }]} />
+      <View
+        style={[
+          styles.dot,
+          {
+            top: 42,
+            right: 70,
+            width: 56,
+            height: 56,
+            backgroundColor: colors.primary,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.dot,
+          {
+            top: 48,
+            right: 28,
+            width: 30,
+            height: 30,
+            backgroundColor: colors.primaryPressed,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.dot,
+          {
+            top: 102,
+            right: 48,
+            width: 40,
+            height: 40,
+            backgroundColor: '#B9A4F7',
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -209,11 +278,10 @@ function GradientButton({
   disabled: boolean;
 }) {
   return (
-    <Pressable
+    <PressableScale
       onPress={onPress}
       disabled={disabled || busy}
-      style={({ pressed }) => [styles.pill, style, { opacity: disabled ? 0.5 : pressed ? 0.85 : 1 }]}
-    >
+      style={[styles.pill, style, { opacity: disabled ? 0.5 : 1 }]}>
       <LinearGradient
         colors={[colors.primary, colors.primaryPressed]}
         start={{ x: 0, y: 0 }}
@@ -221,7 +289,7 @@ function GradientButton({
         style={[StyleSheet.absoluteFill, { borderRadius: radius.pill }]}
       />
       {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.pillText}>{title}</Text>}
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -229,7 +297,10 @@ function Field({
   label,
   icon,
   ...props
-}: React.ComponentProps<typeof TextInput> & { label: string; icon: [ios: string, material: string] }) {
+}: React.ComponentProps<typeof TextInput> & {
+  label: string;
+  icon: [ios: string, material: string];
+}) {
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label}</Text>
@@ -254,10 +325,36 @@ function friendlyError(e: unknown): MessageKey {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
-  content: { flexGrow: 1, justifyContent: 'center', padding: spacing.xl, paddingTop: 240, gap: spacing.lg, maxWidth: 480, width: '100%', alignSelf: 'center' },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.md },
-  greeting: { fontSize: 26, fontWeight: '500', color: colors.textMuted, letterSpacing: -0.4 },
-  title: { flexShrink: 1, fontSize: 54, lineHeight: 62, fontWeight: '700', color: colors.text, letterSpacing: -1.5 },
+  content: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: spacing.xl,
+    paddingTop: 240,
+    gap: spacing.lg,
+    maxWidth: 480,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  greeting: {
+    fontSize: 26,
+    fontWeight: '500',
+    color: colors.textMuted,
+    letterSpacing: -0.4,
+  },
+  title: {
+    flexShrink: 1,
+    fontSize: 54,
+    lineHeight: 62,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: -1.5,
+  },
   field: { gap: 2 },
   label: { fontSize: 15, fontWeight: '500', color: colors.textMuted },
   inputRow: {
@@ -267,7 +364,13 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
     gap: spacing.sm,
   },
-  input: { flex: 1, height: 44, color: colors.text, fontSize: 16, outlineStyle: 'none' } as object,
+  input: {
+    flex: 1,
+    height: 44,
+    color: colors.text,
+    fontSize: 16,
+    outlineStyle: 'none',
+  } as object,
   linkText: { fontSize: 14, color: colors.primary, fontWeight: '500' },
   message: { color: colors.warning, textAlign: 'center' },
   buttonRow: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.xl },
@@ -278,7 +381,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  pillText: { color: '#FFFFFF', fontSize: 17, fontWeight: '600', letterSpacing: -0.2 },
+  pillText: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
   outlineButton: {
     flex: 1,
     height: 52,
@@ -289,6 +397,11 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: colors.primary,
   },
-  outlineText: { color: colors.primary, fontSize: 17, fontWeight: '600', letterSpacing: -0.2 },
+  outlineText: {
+    color: colors.primary,
+    fontSize: 17,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
   dot: { position: 'absolute', borderRadius: 999 },
 });
