@@ -21,6 +21,8 @@ export const TABLES = {
   assessmentResults: "assessment_results",
   conversations: "conversations",
   messages: "messages",
+  practitionerChangeRequests: "practitioner_change_requests",
+  rescheduleRequests: "reschedule_requests",
 } as const;
 
 export type Role = "patient" | "practitioner" | "admin";
@@ -280,4 +282,41 @@ export interface ChatMessage {
   assessment_assignment_id: string | null;
   created_at: Timestamp;
   read_at: Timestamp | null;
+}
+
+export type PatientRequestStatus = "pending" | "approved" | "declined" | "cancelled";
+
+/** A patient asking to move to another practitioner. Written only by database functions. */
+export interface PractitionerChangeRequest {
+  id: string;
+  patient_id: string;
+  patient_name: string;
+  from_practitioner_id: string | null;
+  from_practitioner_name: string | null;
+  /** Empty when the patient left the choice to the clinic. */
+  to_practitioner_id: string | null;
+  to_practitioner_name: string | null;
+  reason: string;
+  status: PatientRequestStatus;
+  created_at: Timestamp;
+  reviewed_by: string | null;
+  reviewed_at: Timestamp | null;
+}
+
+export type RescheduleStatus = "pending" | "accepted" | "declined" | "cancelled";
+
+/** A patient asking to postpone a session to another free time. */
+export interface RescheduleRequest {
+  id: string;
+  appointment_id: string;
+  patient_id: string;
+  patient_name: string;
+  practitioner_id: string;
+  practitioner_name: string;
+  old_start_at: Timestamp;
+  new_start_at: Timestamp;
+  reason: string | null;
+  status: RescheduleStatus;
+  created_at: Timestamp;
+  responded_at: Timestamp | null;
 }

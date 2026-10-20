@@ -32,6 +32,8 @@ export default function RootLayout() {
           <Stack.Screen name="staff" options={{ animation: 'fade' }} />
           <Stack.Screen name="practitioner/[id]" />
           <Stack.Screen name="session/[id]" />
+          <Stack.Screen name="postpone/[id]" />
+          <Stack.Screen name="change-practitioner" />
           <Stack.Screen name="chat/[id]" />
           <Stack.Screen name="assessment/[id]" options={{ presentation: 'modal' }} />
         </Stack>

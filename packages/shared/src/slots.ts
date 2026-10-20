@@ -76,3 +76,29 @@ export function isoDateIn(date: Date, timeZone: string) {
 export function timeIn(date: Date, timeZone: string) {
   return new Intl.DateTimeFormat("en-GB", { timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date);
 }
+
+export interface HoursGroup {
+  /** Weekdays (0 = Sunday) that share these hours, in order. */
+  days: number[];
+  /** Working windows for those days, e.g. [{ start: "16:00", end: "22:00" }]. */
+  windows: { start: string; end: string }[];
+}
+
+/**
+ * Groups a practitioner's weekly hours into runs of days with the same hours, for display:
+ * Sunday to Thursday 16:00 to 22:00 becomes one group.
+ */
+export function groupWeeklyHours(weekly: Practitioner["weekly_hours"]): HoursGroup[] {
+  const groups: HoursGroup[] = [];
+  for (let d = 0; d < 7; d++) {
+    const windows = [...(weekly[String(d)] ?? [])].sort((a, b) => a.start.localeCompare(b.start));
+    if (windows.length === 0) continue;
+    const last = groups[groups.length - 1];
+    if (last && last.days[last.days.length - 1] === d - 1 && JSON.stringify(last.windows) === JSON.stringify(windows)) {
+      last.days.push(d);
+    } else {
+      groups.push({ days: [d], windows });
+    }
+  }
+  return groups;
+}

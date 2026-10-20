@@ -251,6 +251,99 @@ describe("availability requests", () => {
       `insert into availability_requests (kind, from_date, to_date, hours) values ('available', $1, $1, '{"start":"18:00","end":"20:00"}') returning id`,
       [D2]);
     await as(db, admin, "select review_availability_request($1, true)", [id]);
-    await as(db, other, "select book_appointment($1, $2, '18:50')", [drA, D2]);
+    const newcomer = await signUp(db, "n@clinic.test", "Noor");
+    await as(db, newcomer, "select book_appointment($1, $2, '18:50')", [drA, D2]);
+  });
+});
+
+describe("staying with one practitioner", () => {
+  let p: string, req: string;
+  const D3 = day(10), D4 = day(11);
+
+  before(async () => {
+    p = await signUp(db, "committed@clinic.test", "Huda");
+    await as(db, p, "select book_appointment($1, $2, '09:00')", [drA, D3]);
+  });
+
+  test("after the first booking, patients book only with their practitioner", async () => {
+    await rejects(as(db, p, "select book_appointment($1, $2, '09:00')", [drB, D3]), /only with your own practitioner/);
+    await as(db, p, "select book_appointment($1, $2, '09:50')", [drA, D3]);
+  });
+
+  test("patients ask to change; one open request at a time; nobody writes the table directly", async () => {
+    await rejects(
+      as(db, p, "insert into practitioner_change_requests (patient_id, patient_name, reason) values (auth.uid(), 'x', 'y')"),
+      /permission denied/,
+    );
+    [{ id: req }] = await as<{ id: string }>(db, p, "select request_practitioner_change(null, 'Prefer a psychologist') as id");
+    await rejects(as(db, p, "select request_practitioner_change($1, 'again')", [drB]), /already have a request/);
+    const [r] = await as(db, p, "select from_practitioner_name, status from practitioner_change_requests");
+    assert.deepEqual(r, { from_practitioner_name: "Dr A", status: "pending" });
+    assert.equal((await as(db, drB, "select * from practitioner_change_requests")).length, 0);
+  });
+
+  test("only an admin approves, choosing who takes over; old sessions are cancelled", async () => {
+    await rejects(as(db, drA, "select review_practitioner_change($1, true, $2)", [req, drB]), /Only admins/);
+    await rejects(as(db, admin, "select review_practitioner_change($1, true)", [req]), /Choose the new practitioner/);
+    const [r] = await as(db, admin, "select review_practitioner_change($1, true, $2) as cancelled", [req, drB]);
+    assert.equal(r.cancelled, 2);
+    const [f] = await as(db, p, "select primary_practitioner_id from patients where id = auth.uid()");
+    assert.equal(f.primary_practitioner_id, drB);
+    assert.equal((await as(db, drA, "select * from patients where id = $1", [p])).length, 0);
+    await as(db, p, "select book_appointment($1, $2, '09:00')", [drB, D4]);
+    await rejects(as(db, p, "select book_appointment($1, $2, '10:40')", [drA, D4]), /only with your own practitioner/);
+  });
+
+  test("patients can withdraw their own request", async () => {
+    const [{ id }] = await as<{ id: string }>(db, p, "select request_practitioner_change($1, 'Back to Dr A') as id", [drA]);
+    await rejects(as(db, other, "select withdraw_request($1)", [id]), /not found/);
+    await as(db, p, "select withdraw_request($1)", [id]);
+    const [r] = await as(db, p, "select status from practitioner_change_requests where id = $1", [id]);
+    assert.equal(r.status, "cancelled");
+  });
+});
+
+describe("postponing a session", () => {
+  let p: string, appt: string, req: string;
+  const D5 = day(12);
+
+  before(async () => {
+    p = await signUp(db, "postpone@clinic.test", "Laila");
+    [{ id: appt }] = await as<{ id: string }>(db, p, "select book_appointment($1, $2, '09:00') as id", [drA, D5]);
+  });
+
+  test("patients ask for another free time; the session doesn't move yet", async () => {
+    await rejects(as(db, p, "select request_reschedule($1, $2, '10:15')", [appt, D5]), /not available/);
+    await rejects(as(db, other, "select request_reschedule($1, $2, '13:10')", [appt, D5]), /Session not found/);
+    [{ id: req }] = await as<{ id: string }>(db, p, "select request_reschedule($1, $2, '13:10', 'Exam that day') as id", [appt, D5]);
+    await rejects(as(db, p, "select request_reschedule($1, $2, '14:00')", [appt, D5]), /already asked/);
+    const [a] = await as(db, p, "select to_char(start_at at time zone 'Asia/Riyadh', 'HH24:MI') as t from appointments where id = $1", [appt]);
+    assert.equal(a.t, "09:00");
+  });
+
+  test("only the session's practitioner accepts, which moves the session", async () => {
+    await rejects(as(db, drB, "select respond_to_reschedule($1, true)", [req]), /isn't for you/);
+    await rejects(as(db, p, "select respond_to_reschedule($1, true)", [req]), /isn't for you/);
+    await as(db, drA, "select respond_to_reschedule($1, true)", [req]);
+    const [a] = await as(db, p, "select to_char(start_at at time zone 'Asia/Riyadh', 'HH24:MI') as t, status from appointments where id = $1", [appt]);
+    assert.deepEqual(a, { t: "13:10", status: "scheduled" });
+    const [r] = await as(db, p, "select status from reschedule_requests where id = $1", [req]);
+    assert.equal(r.status, "accepted");
+  });
+
+  test("cancelling a session closes its open postpone request", async () => {
+    const [{ id }] = await as<{ id: string }>(db, p, "select request_reschedule($1, $2, '14:00') as id", [appt, D5]);
+    await as(db, p, "select cancel_appointment($1)", [appt]);
+    const [r] = await as(db, p, "select status from reschedule_requests where id = $1", [id]);
+    assert.equal(r.status, "cancelled");
+  });
+});
+
+describe("evening hours", () => {
+  test("new practitioners start Sunday to Thursday, 4 pm to 10 pm", async () => {
+    await signUp(db, "c@clinic.test", "Dr C");
+    const id = (await as<{ id: string }>(db, admin, "select promote_to_practitioner('c@clinic.test', 'Dr C', 'Psychologist', 'psychology') as id"))[0].id;
+    const [p] = await as<{ h: unknown }>(db, admin, "select weekly_hours -> '0' as h from practitioners where id = $1", [id]);
+    assert.deepEqual(p.h, [{ start: "16:00", end: "22:00" }]);
   });
 });

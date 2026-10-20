@@ -8,6 +8,8 @@ import type {
   MessageTemplate,
   Patient,
   Practitioner,
+  PractitionerChangeRequest,
+  RescheduleRequest,
   Transfer,
 } from '@chester/shared';
 
@@ -106,5 +108,27 @@ export function useForms() {
     'forms',
     () => supabase.from('assessment_forms').select('*').eq('active', true).order('code'),
     ['assessment_forms'],
+  );
+}
+
+/** Postpone requests for this practitioner's sessions; admins see every practitioner's. */
+export function useRescheduleRequests(uid: string | undefined, isAdmin: boolean) {
+  return useRows<RescheduleRequest>(
+    uid ? `staff-reschedules:${isAdmin ? 'all' : uid}` : null,
+    () => {
+      const q = supabase.from('reschedule_requests').select('*').order('created_at', { ascending: false }).limit(200);
+      return isAdmin ? q : q.eq('practitioner_id', uid!);
+    },
+    ['reschedule_requests'],
+  );
+}
+
+/** Change-of-practitioner requests this user can see (all of them for admins, their own patients' otherwise). */
+export function useChangeRequests(uid: string | undefined) {
+  return useRows<PractitionerChangeRequest>(
+    uid ? `staff-change-requests:${uid}` : null,
+    () =>
+      supabase.from('practitioner_change_requests').select('*').order('created_at', { ascending: false }).limit(200),
+    ['practitioner_change_requests'],
   );
 }

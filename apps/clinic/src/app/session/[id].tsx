@@ -2,11 +2,13 @@ import { colors, radius, spacing, type Appointment, type Conversation } from '@c
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Avatar, Button, Card, Empty, Icon, Loading, Screen, Text } from '@/components/ui';
+import { confirm, showError } from '@/lib/dialogs';
 import { formatDate, formatTime } from '@/lib/format';
 import { useLive } from '@/lib/hooks';
+import { useRescheduleRequests } from '@/lib/queries';
 import { rpc, supabase } from '@/lib/supabase';
 
 /** Session details, modelled on the "Live Consultation" screen of the reference. */
@@ -24,27 +26,33 @@ export default function SessionScreen() {
     () => supabase.from('conversations').select('*').eq('practitioner_id', practitionerId!).maybeSingle(),
     [],
   );
+  const { data: reschedules } = useRescheduleRequests(a?.id);
+  const pendingMove = reschedules.find((r) => r.status === 'pending');
+  const lastMove = reschedules[0];
   const now = useNow();
 
   if (loading) return <Loading />;
-  if (!a) return <Screen><Empty text="Session not found." /></Screen>;
+  if (!a)
+    return (
+      <Screen>
+        <Empty text="Session not found." />
+      </Screen>
+    );
 
   const start = Date.parse(a.start_at);
   const end = Date.parse(a.end_at);
   const live = a.status === 'scheduled' && now >= start - 10 * 60_000 && now <= end;
   const countdown = start - now;
 
-  function cancel() {
-    Alert.alert('Cancel this session?', 'Your practitioner will be notified.', [
-      { text: 'Keep it', style: 'cancel' },
-      {
-        text: 'Cancel session',
-        style: 'destructive',
-        onPress: () =>
-          rpc('cancel_appointment', { p_appointment: id }).catch((e: Error) => Alert.alert('Could not cancel', e.message)),
-      },
-    ]);
-  }
+  const cancel = () =>
+    confirm('Cancel this session?', 'Your practitioner will be notified.', 'Cancel session', 'Keep it', () =>
+      rpc('cancel_appointment', { p_appointment: id }).catch((e) => showError('Could not cancel', e)),
+    );
+
+  const withdrawMove = (requestId: string) =>
+    confirm('Withdraw your request?', 'Your session stays at its current time.', 'Withdraw', 'Keep it', () =>
+      rpc('withdraw_request', { p_request: requestId }).catch((e) => showError('Could not withdraw', e)),
+    );
 
   return (
     <Screen>
@@ -55,7 +63,9 @@ export default function SessionScreen() {
       <Card style={styles.hero}>
         <View style={{ flex: 1, gap: 6 }}>
           <Text variant="small">{live ? 'Live Consultation' : 'Your Session'}</Text>
-          <Text variant="title" style={{ fontSize: 22 }}>{a.practitioner_name}</Text>
+          <Text variant="title" style={{ fontSize: 22 }}>
+            {a.practitioner_name}
+          </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <View style={[styles.dot, { backgroundColor: live ? colors.success : colors.textFaint }]} />
             <Text variant="small">{live ? 'Ready to join' : a.status === 'scheduled' ? 'Scheduled' : a.status}</Text>
@@ -78,7 +88,9 @@ export default function SessionScreen() {
         {countdown > 0 && a.status === 'scheduled' ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Text variant="small">Starts in</Text>
-            <Text variant="heading" style={{ color: colors.primary }}>{formatCountdown(countdown)}</Text>
+            <Text variant="heading" style={{ color: colors.primary }}>
+              {formatCountdown(countdown)}
+            </Text>
           </View>
         ) : null}
       </Card>
@@ -100,6 +112,26 @@ export default function SessionScreen() {
               onPress={() => router.push(`/chat/${conversation.id}`)}
             />
           ) : null}
+          {pendingMove ? (
+            <Card style={{ gap: spacing.sm }}>
+              <Text variant="heading">Postponement requested</Text>
+              <Text variant="muted">
+                You asked to move this session to {formatDate(pendingMove.new_start_at)} at{' '}
+                {formatTime(pendingMove.new_start_at)}. It stays at the current time until your practitioner agrees.
+              </Text>
+              <Pressable onPress={() => withdrawMove(pendingMove.id)} hitSlop={8}>
+                <Text style={{ color: colors.danger, fontWeight: '600' }}>Withdraw request</Text>
+              </Pressable>
+            </Card>
+          ) : lastMove?.status === 'declined' ? (
+            <Text variant="small">
+              Your practitioner couldn't move this session to {formatDate(lastMove.new_start_at)}. You can ask for
+              another time.
+            </Text>
+          ) : null}
+          {countdown > 0 && !pendingMove && (
+            <Button title="Request to postpone" variant="secondary" onPress={() => router.push(`/postpone/${a.id}`)} />
+          )}
           {countdown > 0 && <Button title="Cancel session" variant="danger" onPress={cancel} />}
         </>
       )}

@@ -6,9 +6,15 @@ import { CountDot } from '@/components/staff';
 import { Avatar, Button, Card, Icon, Screen, Text } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 import { useI18n, type MessageKey } from '@/lib/i18n';
-import { usePendingAvailabilityRequests, useTransfers } from '@/lib/staff-queries';
+import {
+  useChangeRequests,
+  usePendingAvailabilityRequests,
+  useRescheduleRequests,
+  useTransfers,
+} from '@/lib/staff-queries';
 
 const links: { href: Href; key: MessageKey; ios: string; material: string; adminOnly?: boolean }[] = [
+  { href: '/staff/requests', key: 'navRequests', ios: 'tray', material: 'inbox' },
   { href: '/staff/transfers', key: 'navTransfers', ios: 'arrow.left.arrow.right', material: 'swap_horiz' },
   { href: '/staff/availability', key: 'navAvailability', ios: 'clock', material: 'schedule' },
   { href: '/staff/templates', key: 'navTemplates', ios: 'envelope', material: 'mail' },
@@ -21,7 +27,12 @@ export default function More() {
   const { t, locale, setLocale, dir } = useI18n();
   const { data: incoming } = useTransfers(user?.id, 'to_practitioner_id');
   const { data: requests } = usePendingAvailabilityRequests(isAdmin);
+  const { data: reschedules } = useRescheduleRequests(user?.id, isAdmin);
+  const { data: changes } = useChangeRequests(user?.id);
   const counts: Partial<Record<MessageKey, number>> = {
+    navRequests:
+      reschedules.filter((x) => x.status === 'pending').length +
+      (isAdmin ? changes.filter((x) => x.status === 'pending').length : 0),
     navTransfers: incoming.filter((x) => x.status === 'pending').length,
     navAvailability: requests.length,
   };
