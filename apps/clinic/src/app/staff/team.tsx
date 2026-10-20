@@ -6,6 +6,7 @@ import { StyleSheet, Switch, View } from 'react-native';
 import { BackHeader, Choice, Field, Row } from '@/components/staff';
 import { Avatar, Button, Card, Empty, Screen, SectionHeader, Text } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
+import { showError } from '@/lib/dialogs';
 import { useI18n } from '@/lib/i18n';
 import { usePractitioners } from '@/lib/staff-queries';
 import { rpc } from '@/lib/supabase';
@@ -62,7 +63,11 @@ export default function Team() {
       <SectionHeader title={t('addPractitioner')} />
       <Card style={styles.stack}>
         <Text variant="muted">{t('inviteFirst')}</Text>
-        <Field label={t('name')} value={form.displayName} onChangeText={(displayName) => setForm({ ...form, displayName })} />
+        <Field
+          label={t('name')}
+          value={form.displayName}
+          onChangeText={(displayName) => setForm({ ...form, displayName })}
+        />
         <Field
           label={t('email')}
           value={form.email}
@@ -111,12 +116,52 @@ export default function Team() {
               </Text>
             </View>
           </Row>
+          <FeeEditor practitionerId={p.id} fee={Number(p.session_fee ?? 0)} onSaved={refresh} />
         </Card>
       ))}
     </Screen>
   );
 }
 
+/** Session fee for one practitioner. New bookings use it; past sessions keep the fee they were booked at. */
+function FeeEditor({ practitionerId, fee, onSaved }: { practitionerId: string; fee: number; onSaved: () => unknown }) {
+  const { t } = useI18n();
+  const [value, setValue] = useState(String(fee));
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const parsed = Number(value.replace(',', '.'));
+  const changed = value.trim() !== '' && !Number.isNaN(parsed) && parsed !== fee;
+
+  async function save() {
+    setBusy(true);
+    setSaved(false);
+    try {
+      await rpc('set_session_fee', { p_practitioner: practitionerId, p_fee: parsed });
+      setSaved(true);
+      await onSaved();
+    } catch (e) {
+      showError(t('error'), e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={styles.fee}>
+      <View style={{ flex: 1 }}>
+        <Field label={t('sessionFee')} value={value} onChangeText={setValue} keyboardType="decimal-pad" />
+      </View>
+      <Button
+        title={saved && !changed ? t('feeSaved') : t('setFee')}
+        onPress={save}
+        disabled={!changed}
+        loading={busy}
+      />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   stack: { gap: spacing.md },
+  fee: { flexDirection: 'row', alignItems: 'flex-end', gap: spacing.md, marginTop: spacing.md },
 });

@@ -347,3 +347,19 @@ describe("evening hours", () => {
     assert.deepEqual(p.h, [{ start: "16:00", end: "22:00" }]);
   });
 });
+
+describe("session fees", () => {
+  test("only admins set fees, and each booking keeps the fee it was booked at", async () => {
+    const pt = await signUp(db, "fee@clinic.test", "Fee Patient");
+    const [{ id: drC }] = await as<{ id: string }>(db, admin, "select id from practitioners where display_name = 'Dr C'");
+    await rejects(as(db, drC, "select set_session_fee($1, 300)", [drC]), /Only admins/);
+    await rejects(as(db, drC, "update practitioners set session_fee = 1 where id = auth.uid()"), /permission denied/);
+    await as(db, admin, "select set_session_fee($1, 300)", [drC]);
+    const allWeek = JSON.stringify(Object.fromEntries([0, 1, 2, 3, 4, 5, 6].map((d) => [d, [{ start: "09:00", end: "17:00" }]])));
+    await as(db, drC, "update practitioners set weekly_hours = $1 where id = auth.uid()", [allWeek]);
+    const [{ id }] = await as<{ id: string }>(db, pt, "select book_appointment($1, $2, '09:00') as id", [drC, day(12)]);
+    await as(db, admin, "select set_session_fee($1, 450)", [drC]);
+    const [a] = await as<{ fee: string }>(db, drC, "select fee from appointments where id = $1", [id]);
+    assert.equal(Number(a.fee), 300);
+  });
+});

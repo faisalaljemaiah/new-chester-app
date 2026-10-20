@@ -41,6 +41,11 @@ export default function StaffTabs() {
           options={{
             title: t(tab.key),
             tabBarBadge: badges[tab.name] ? badges[tab.name] : undefined,
+            // The overview is dark (after fai's reference), so its tab bar is too.
+            ...(tab.name === 'index' && {
+              tabBarStyle: { backgroundColor: '#151517', borderTopColor: '#2A2A2E', height: 84, paddingTop: 8 },
+              tabBarInactiveTintColor: '#6E6E76',
+            }),
             tabBarIcon: ({ color }) => <Icon ios={tab.ios} material={tab.material} color={color} size={22} />,
           }}
         />

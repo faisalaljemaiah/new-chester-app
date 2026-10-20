@@ -69,6 +69,8 @@ export interface Practitioner {
   /** Extra dates opened by approved "available" requests. */
   extra_days: ({ date: IsoDate } & TimeWindow)[];
   active: boolean;
+  /** Price of one session in SAR, set by an admin. 0 until set. */
+  session_fee: number;
 }
 
 export type PatientStatus = "active" | "on_hold" | "discharged";
@@ -133,6 +135,8 @@ export interface Appointment {
   meeting_url: string | null;
   cancel_reason: string | null;
   created_at: Timestamp;
+  /** The practitioner's session fee (SAR) when this was booked. */
+  fee: number;
 }
 
 export type TransferStatus = "pending" | "accepted" | "declined" | "cancelled";
