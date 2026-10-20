@@ -1,8 +1,11 @@
-import { colors } from '@chester/shared';
+import { colors, radius, spacing } from '@chester/shared';
 import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
+import type { ComponentProps } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Icon, Loading } from '@/components/ui';
+import { Icon, Loading, Text } from '@/components/ui';
 import { useAuth } from '@/lib/auth';
 
 const tabs = [
@@ -19,19 +22,7 @@ export default function TabsLayout() {
   if (isStaff) return <Redirect href="/staff" />;
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textFaint,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          height: 84,
-          paddingTop: 8,
-        },
-        tabBarLabelStyle: { fontSize: 11 },
-      }}>
+    <Tabs tabBar={(props) => <FloatingTabBar {...props} />} screenOptions={{ headerShown: false }}>
       {tabs.map((t) => (
         <Tabs.Screen
           key={t.name}
@@ -45,3 +36,55 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
+
+/** Floating pill bar, after fai's reference: the current tab shows its name in a purple pill, the others are icons. */
+function FloatingTabBar({ state, navigateToTab }: TabBarProps) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+      <View style={styles.bar}>
+        {state.routes.map((route, index) => {
+          const tab = tabs.find((t) => t.name === route.name);
+          if (!tab) return null;
+          const focused = state.index === index;
+          return (
+            <Pressable
+              key={route.key}
+              accessibilityRole="tab"
+              accessibilityLabel={tab.title}
+              accessibilityState={{ selected: focused }}
+              onPress={() => !focused && navigateToTab(route.key)}
+              style={[styles.item, focused && styles.itemActive]}>
+              <Icon ios={tab.ios} material={tab.material} color={focused ? colors.onPrimary : colors.textMuted} size={22} />
+              {focused && <Text style={styles.label}>{tab.title}</Text>}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrap: { backgroundColor: colors.background, paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 6,
+    borderRadius: radius.pill,
+    backgroundColor: '#FFFFFF',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.border,
+    shadowColor: '#3B2A80',
+    shadowOpacity: 0.12,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8,
+  },
+  item: { height: 52, minWidth: 52, borderRadius: 26, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 },
+  itemActive: { backgroundColor: colors.primary, paddingHorizontal: spacing.lg },
+  label: { fontSize: 15, fontWeight: '600', color: colors.onPrimary },
+});
