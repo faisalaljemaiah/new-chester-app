@@ -1,10 +1,10 @@
 import { colors, isoDateIn, slotsForDate, spacing, timeIn, type Appointment, type Practitioner } from '@chester/shared';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 
-import { Field } from '@/components/staff';
-import { Button, Card, Chip, Empty, Icon, Loading, Screen, SectionHeader, Text } from '@/components/ui';
+import { Group, GroupBox, GroupedScreen, ios, Row, RowIcon } from '@/components/grouped';
+import { Button, Chip, Empty, Loading, Screen, Text } from '@/components/ui';
 import { showError, showMessage } from '@/lib/dialogs';
 import { formatDate, formatHours, formatTime } from '@/lib/format';
 import { useLive } from '@/lib/hooks';
@@ -75,78 +75,81 @@ export default function PostponeScreen() {
     }
   }
 
+  const hours = p ? formatHours(p.weekly_hours) : [];
+
   return (
-    <Screen>
-      <Pressable onPress={() => router.back()} hitSlop={12}>
-        <Icon ios="chevron.left" material="arrow_back" />
-      </Pressable>
-      <Text variant="title">Postpone your session</Text>
+    <GroupedScreen
+      back="Session"
+      title="Postpone"
+      subtitle="Choose a new time. Your session stays where it is until your practitioner accepts.">
+      <Group
+        header="Current session"
+        footer={hours.length ? `${a.practitioner_name} works ${hours.join(', ')}.` : undefined}>
+        <Row
+          left={<RowIcon ios="calendar" material="event" color="#FF3B30" />}
+          title={formatDate(a.start_at)}
+          subtitle={a.practitioner_name}
+          value={formatTime(a.start_at)}
+        />
+      </Group>
 
-      <Card style={{ gap: 4 }}>
-        <Text variant="small">Currently booked with {a.practitioner_name}</Text>
-        <Text variant="heading">
-          {formatDate(a.start_at)} · {formatTime(a.start_at)}
-        </Text>
-        {p
-          ? formatHours(p.weekly_hours).map((line) => (
-              <Text key={line} variant="small">
-                Works {line}
-              </Text>
-            ))
-          : null}
-      </Card>
+      <GroupBox header="New day">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+          {days.map((d) => {
+            const dt = new Date(`${d}T12:00:00Z`);
+            return (
+              <Chip
+                key={d}
+                label={dt.toLocaleDateString(undefined, { day: 'numeric', timeZone: 'UTC' })}
+                sublabel={dt.toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })}
+                selected={d === selectedDate}
+                onPress={() => {
+                  setDate(d);
+                  setTime(undefined);
+                }}
+              />
+            );
+          })}
+        </ScrollView>
+      </GroupBox>
 
-      <SectionHeader title="Pick a new day" />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-        {days.map((d) => {
-          const dt = new Date(`${d}T12:00:00Z`);
-          return (
-            <Chip
-              key={d}
-              label={dt.toLocaleDateString(undefined, { day: 'numeric', timeZone: 'UTC' })}
-              sublabel={dt.toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' })}
-              selected={d === selectedDate}
-              onPress={() => {
-                setDate(d);
-                setTime(undefined);
-              }}
-            />
-          );
-        })}
-      </ScrollView>
+      <GroupBox header="Free times">
+        {slots.length === 0 ? (
+          <Text style={{ color: ios.secondary, textAlign: 'center', paddingVertical: spacing.md }}>
+            No free times on this day.
+          </Text>
+        ) : (
+          <View style={styles.grid}>
+            {slots.map((s) => (
+              <Chip key={s.time} label={s.time} selected={s.time === time} onPress={() => setTime(s.time)} />
+            ))}
+          </View>
+        )}
+      </GroupBox>
 
-      <SectionHeader title="Free times" />
-      {slots.length === 0 ? (
-        <Empty text="No free times on this day." />
-      ) : (
-        <View style={styles.grid}>
-          {slots.map((s) => (
-            <Chip key={s.time} label={s.time} selected={s.time === time} onPress={() => setTime(s.time)} />
-          ))}
-        </View>
-      )}
+      <GroupBox header="Reason" footer="Optional. Only your practitioner sees this.">
+        <TextInput
+          placeholder="Let your practitioner know why"
+          placeholderTextColor="#C4C4C7"
+          value={reason}
+          onChangeText={setReason}
+          multiline
+          maxLength={2000}
+          style={styles.input}
+        />
+      </GroupBox>
 
-      <Field
-        label="Reason (optional)"
-        placeholder="Let your practitioner know why"
-        value={reason}
-        onChangeText={setReason}
-        multiline
-        maxLength={2000}
-      />
-      <Text variant="small" style={{ color: colors.textMuted }}>
-        Your session stays at its current time until your practitioner accepts the new one.
-      </Text>
       <Button
-        title={time ? `Ask to move to ${selectedDate} at ${time}` : 'Pick a time'}
+        title={time ? `Request ${selectedDate} at ${time}` : 'Pick a time'}
         onPress={send}
         disabled={!time}
         loading={busy}
       />
-    </Screen>
+    </GroupedScreen>
   );
 }
 
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  input: { minHeight: 88, fontSize: 17, color: colors.text, textAlignVertical: 'top', padding: 4 },
 });

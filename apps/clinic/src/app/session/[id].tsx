@@ -2,9 +2,10 @@ import { colors, radius, spacing, type Appointment, type Conversation } from '@c
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
-import { Avatar, Button, Card, Empty, Icon, Loading, Screen, Text } from '@/components/ui';
+import { Group, GroupedScreen, ios, Row, RowIcon } from '@/components/grouped';
+import { Avatar, Button, Empty, Loading, Screen, Text } from '@/components/ui';
 import { confirm, showError } from '@/lib/dialogs';
 import { formatDate, formatTime } from '@/lib/format';
 import { useLive } from '@/lib/hooks';
@@ -54,90 +55,104 @@ export default function SessionScreen() {
       rpc('withdraw_request', { p_request: requestId }).catch((e) => showError('Could not withdraw', e)),
     );
 
+  const minutes = Math.round((end - start) / 60_000);
+  const modeLabel = a.mode === 'video' ? 'Video' : a.mode === 'audio' ? 'Voice' : 'Chat';
+  const statusLabel = live ? 'Ready to join' : a.status === 'scheduled' ? 'Scheduled' : capitalize(a.status);
+
   return (
-    <Screen>
-      <Pressable onPress={() => router.back()} hitSlop={12}>
-        <Icon ios="chevron.left" material="arrow_back" />
-      </Pressable>
+    <GroupedScreen back="Sessions">
+      <View style={styles.hero}>
+        <Avatar name={a.practitioner_name} size={96} />
+        <Text style={styles.heroName}>{a.practitioner_name}</Text>
+        <View style={styles.statusPill}>
+          <View style={[styles.dot, { backgroundColor: live ? colors.success : ios.secondary }]} />
+          <Text style={styles.statusText}>{statusLabel}</Text>
+        </View>
+      </View>
 
-      <Card style={styles.hero}>
-        <View style={{ flex: 1, gap: 6 }}>
-          <Text variant="small">{live ? 'Live Consultation' : 'Your Session'}</Text>
-          <Text variant="title" style={{ fontSize: 22 }}>
-            {a.practitioner_name}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <View style={[styles.dot, { backgroundColor: live ? colors.success : colors.textFaint }]} />
-            <Text variant="small">{live ? 'Ready to join' : a.status === 'scheduled' ? 'Scheduled' : a.status}</Text>
-          </View>
-        </View>
-        <Avatar name={a.practitioner_name} size={88} />
-      </Card>
-
-      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.lg }}>
-        <View style={styles.iconBox}>
-          <Icon ios="video.fill" material="videocam" color={colors.primary} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Text variant="small">{formatDate(a.start_at)}</Text>
-          <Text variant="title">{formatTime(a.start_at)}</Text>
-          <Text variant="small">
-            {Math.round((end - start) / 60_000)} minutes · {a.mode}
-          </Text>
-        </View>
+      <Group header="Details">
+        <Row
+          left={<RowIcon ios="calendar" material="event" color="#FF3B30" />}
+          title="Date"
+          value={formatDate(a.start_at)}
+        />
+        <Row
+          left={<RowIcon ios="clock.fill" material="schedule" color="#FF9500" />}
+          title="Time"
+          value={formatTime(a.start_at)}
+        />
+        <Row left={<RowIcon ios="timer" material="timer" color="#34C759" />} title="Length" value={`${minutes} min`} />
+        <Row left={<RowIcon ios="video.fill" material="videocam" color="#007AFF" />} title="Type" value={modeLabel} />
         {countdown > 0 && a.status === 'scheduled' ? (
-          <View style={{ alignItems: 'flex-end' }}>
-            <Text variant="small">Starts in</Text>
-            <Text variant="heading" style={{ color: colors.primary }}>
-              {formatCountdown(countdown)}
-            </Text>
-          </View>
+          <Row
+            left={<RowIcon ios="hourglass" material="hourglass_top" color={colors.primary} />}
+            title="Starts in"
+            value={formatCountdown(countdown)}
+          />
         ) : null}
-      </Card>
+      </Group>
 
       {a.status === 'scheduled' && (
         <>
-          <Button
-            title={live ? 'Join Session' : 'Join opens 10 minutes before'}
-            disabled={!live || !a.meeting_url}
-            onPress={() => a.meeting_url && WebBrowser.openBrowserAsync(a.meeting_url)}
-          />
-          {live && !a.meeting_url ? (
-            <Text variant="small">Your practitioner will share the session link here shortly.</Text>
-          ) : null}
-          {conversation ? (
+          <View style={{ gap: spacing.sm }}>
             <Button
-              title="Message your practitioner"
-              variant="secondary"
-              onPress={() => router.push(`/chat/${conversation.id}`)}
+              title={live ? 'Join Session' : 'Join opens 10 minutes before'}
+              disabled={!live || !a.meeting_url}
+              onPress={() => a.meeting_url && WebBrowser.openBrowserAsync(a.meeting_url)}
             />
-          ) : null}
+            {live && !a.meeting_url ? (
+              <Text style={styles.note}>Your practitioner will share the session link here shortly.</Text>
+            ) : null}
+          </View>
+
           {pendingMove ? (
-            <Card style={{ gap: spacing.sm }}>
-              <Text variant="heading">Postponement requested</Text>
-              <Text variant="muted">
-                You asked to move this session to {formatDate(pendingMove.new_start_at)} at{' '}
-                {formatTime(pendingMove.new_start_at)}. It stays at the current time until your practitioner agrees.
-              </Text>
-              <Pressable onPress={() => withdrawMove(pendingMove.id)} hitSlop={8}>
-                <Text style={{ color: colors.danger, fontWeight: '600' }}>Withdraw request</Text>
-              </Pressable>
-            </Card>
-          ) : lastMove?.status === 'declined' ? (
-            <Text variant="small">
-              Your practitioner couldn't move this session to {formatDate(lastMove.new_start_at)}. You can ask for
-              another time.
-            </Text>
+            <Group
+              header="Postponement requested"
+              footer="Your session stays at its current time until your practitioner agrees.">
+              <Row
+                left={<RowIcon ios="calendar.badge.clock" material="update" color="#FF9500" />}
+                title="Requested time"
+                subtitle={`${formatDate(pendingMove.new_start_at)} · ${formatTime(pendingMove.new_start_at)}`}
+                value="Waiting"
+              />
+              <Row title="Withdraw Request" destructive onPress={() => withdrawMove(pendingMove.id)} chevron={false} />
+            </Group>
           ) : null}
-          {countdown > 0 && !pendingMove && (
-            <Button title="Request to postpone" variant="secondary" onPress={() => router.push(`/postpone/${a.id}`)} />
-          )}
-          {countdown > 0 && <Button title="Cancel session" variant="danger" onPress={cancel} />}
+
+          <Group
+            footer={
+              lastMove?.status === 'declined' && !pendingMove
+                ? `Your practitioner couldn't move this session to ${formatDate(lastMove.new_start_at)}. You can ask for another time.`
+                : undefined
+            }>
+            {conversation ? (
+              <Row
+                left={<RowIcon ios="bubble.left.fill" material="chat_bubble" color="#34C759" />}
+                title="Message Practitioner"
+                onPress={() => router.push(`/chat/${conversation.id}`)}
+              />
+            ) : null}
+            {countdown > 0 && !pendingMove ? (
+              <Row
+                left={<RowIcon ios="calendar.badge.clock" material="update" color="#FF9500" />}
+                title="Request to Postpone"
+                onPress={() => router.push(`/postpone/${a.id}`)}
+              />
+            ) : null}
+          </Group>
+
+          {countdown > 0 ? (
+            <Group footer="Your practitioner will be notified.">
+              <Row title="Cancel Session" destructive centered onPress={cancel} chevron={false} />
+            </Group>
+          ) : null}
         </>
       )}
-    </Screen>
+    </GroupedScreen>
   );
 }
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function useNow() {
   const [now, setNow] = useState(Date.now());
@@ -157,14 +172,18 @@ function formatCountdown(ms: number) {
 }
 
 const styles = StyleSheet.create({
-  hero: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg, padding: spacing.xl },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  iconBox: {
-    width: 52,
-    height: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
+  hero: { alignItems: 'center', gap: spacing.sm, paddingTop: spacing.sm },
+  heroName: { fontSize: 28, lineHeight: 34, fontWeight: '700', color: colors.text, letterSpacing: 0.3 },
+  statusPill: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
   },
+  statusText: { fontSize: 13, fontWeight: '600', color: colors.text },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+  note: { fontSize: 13, color: ios.secondary, textAlign: 'center' },
 });
